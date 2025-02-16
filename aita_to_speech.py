@@ -4,6 +4,7 @@ import markdown
 import re
 import asyncio
 import json
+import traceback
 from datetime import datetime
 from edge_tts import Communicate
 from edge_tts.exceptions import NoAudioReceived
