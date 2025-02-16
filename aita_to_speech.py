@@ -185,7 +185,9 @@ def generate_image(title, upvotes, comments, output_path):
         y = TEXT_POSITION[1]
 
         for line in lines:
-            width, height = font.getsize(line)
+            # Use getbbox() instead of getsize()
+            bbox = font.getbbox(line)
+            height = bbox[3] - bbox[1]  # bottom - top
             draw.text((TEXT_POSITION[0], y), line, fill=TEXT_COLOR, font=font)
             y += height  # Move to the next line
 
@@ -205,6 +207,10 @@ def generate_image(title, upvotes, comments, output_path):
 def create_video_with_overlay(image_path, video_path, output_path, duration):
     """Overlays the image on the video for a specified duration."""
     try:
+        if not os.path.exists(video_path):
+            print(f"Warning: Template video {video_path} not found. Skipping video creation.")
+            return False
+            
         # Load the video clip
         video_clip = VideoFileClip(video_path)
 
@@ -217,13 +223,14 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
         # Write the final video to a file
         final_clip.write_videofile(
             output_path, fps=24, codec="libx264", audio_codec="aac"
-        )  # Adjust fps and codec as needed
+        )
 
         print(f"Generated video with overlay: {output_path}")
+        return True
 
     except Exception as e:
         print(f"Error creating video with overlay: {e}")
-
+        return False
 
 async def process_story(story, index):
     """Process a single story asynchronously"""
@@ -251,16 +258,19 @@ async def process_story(story, index):
             story["title"], story["upvotes"], story["comments"], image_path
         )
 
-        # Calculate overlay duration based on title length
-        num_words = len(story["title"].split())
-        overlay_duration = max(
-            num_words / WORDS_PER_SECOND, MIN_OVERLAY_DURATION
-        )  # Ensure a minimum duration
+        # Only attempt video creation if template.mp4 exists
+        if os.path.exists(VIDEO_TEMPLATE):
+            # Calculate overlay duration based on title length
+            num_words = len(story["title"].split())
+            overlay_duration = max(
+                num_words / WORDS_PER_SECOND, MIN_OVERLAY_DURATION
+            )
 
-        # Create the video with the image overlay
-        create_video_with_overlay(
-            image_path, VIDEO_TEMPLATE, video_path, overlay_duration
-        )
+            # Create the video with the image overlay
+            if not create_video_with_overlay(image_path, VIDEO_TEMPLATE, video_path, overlay_duration):
+                print(f"Warning: Video creation failed for {safe_title}")
+        else:
+            print(f"Warning: Template video {VIDEO_TEMPLATE} not found. Skipping video creation.")
 
     except Exception as e:
         print(f"Error processing story {story['id']}: {e}")
