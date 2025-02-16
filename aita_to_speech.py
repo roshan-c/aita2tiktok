@@ -275,51 +275,73 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
         print(f"Processing image: {image_path}")
         print(f"Target dimensions: {VIDEO_WIDTH}x{VIDEO_HEIGHT}")
         
-        # Convert image to video with letterboxing/pillarboxing
+        # Probe image dimensions
+        img = Image.open(image_path)
+        print(f"Original image dimensions: {img.size}")
+        img.close()
+        
+        # Simple filter chain for consistent results
         filter_chain = [
-            f'scale=w={VIDEO_WIDTH}:h={VIDEO_HEIGHT}:force_original_aspect_ratio=decrease',
-            f'pad={VIDEO_WIDTH}:{VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2:black',
-            'setsar=1'  # Set sample aspect ratio to 1:1
+            'scale=w=-2:h=1920',  # Scale to target height, maintain ratio
+            'scale=w=1080:h=1920:force_original_aspect_ratio=1',  # Force to exact dimensions
+            'setsar=1'  # Set pixel aspect ratio to square
         ]
         
+        print("Converting image to video...")
         # Convert image to video
         (
             ffmpeg
             .input(str(image_path), loop=1, t=duration)
             .filter_multi_output(filter_chain)
-            .output(temp_image_video, vcodec='libx264', preset='ultrafast', pix_fmt='yuv420p', r=VIDEO_FPS)
+            .output(
+                temp_image_video,
+                vcodec='libx264',
+                preset='ultrafast',
+                pix_fmt='yuv420p',
+                r=VIDEO_FPS
+            )
             .overwrite_output()
-            .global_args('-loglevel', 'info')
+            .global_args('-hide_banner')
             .run(capture_stdout=True, capture_stderr=True)
         )
         print("Image conversion completed")
         
-        print(f"Processing video: {video_path}")
-        # Process template video with the same filter chain
+        # Probe video dimensions
+        probe = ffmpeg.probe(video_path)
+        video_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
+        print(f"Original video dimensions: {video_info['width']}x{video_info['height']}")
+        
+        print(f"Processing template video: {video_path}")
+        # Process template video with same filter chain
         (
             ffmpeg
             .input(video_path)
             .filter_multi_output(filter_chain)
-            .output(temp_main_video, vcodec='libx264', preset='ultrafast', pix_fmt='yuv420p', r=VIDEO_FPS)
+            .output(
+                temp_main_video,
+                vcodec='libx264',
+                preset='ultrafast',
+                pix_fmt='yuv420p',
+                r=VIDEO_FPS
+            )
             .overwrite_output()
-            .global_args('-loglevel', 'info')
+            .global_args('-hide_banner')
             .run(capture_stdout=True, capture_stderr=True)
         )
         print("Video processing completed")
         
-        # Create concat file in the same directory as the output
+        # Create concat file
         concat_file = temp_dir / 'concat.txt'
-        with open(concat_file, 'w', encoding='utf-8') as f:  # Explicitly use UTF-8
+        with open(concat_file, 'w', encoding='utf-8') as f:
             f.write(f"file '{os.path.basename(temp_image_video)}'\n")
             f.write(f"file '{os.path.basename(temp_main_video)}'\n")
             
         print("Concatenating videos...")
-        # Change to output directory for concat operation
         original_cwd = os.getcwd()
         os.chdir(temp_dir)
         
         try:
-            # Concatenate the videos with consistent encoding settings
+            # Concatenate with consistent settings
             (
                 ffmpeg
                 .input(str(concat_file), f='concat', safe=0)
@@ -332,24 +354,26 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
                     acodec='aac'
                 )
                 .overwrite_output()
-                .global_args('-loglevel', 'info')
+                .global_args('-hide_banner')
                 .run(capture_stdout=True, capture_stderr=True)
             )
+            print(f"Final video created: {output_path}")
+            
+            # Verify final video dimensions
+            probe = ffmpeg.probe(output_path)
+            final_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
+            print(f"Final video dimensions: {final_info['width']}x{final_info['height']}")
+            
         finally:
-            # Restore working directory
             os.chdir(original_cwd)
+            # Clean up temporary files
+            for temp_file in [temp_image_video, temp_main_video, concat_file]:
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                except Exception as e:
+                    print(f"Warning: Could not remove temporary file {temp_file}: {e}")
         
-        print("Video concatenation completed")
-        
-        # Clean up temporary files
-        for temp_file in [temp_image_video, temp_main_video, concat_file]:
-            try:
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-            except Exception as e:
-                print(f"Warning: Could not remove temporary file {temp_file}: {e}")
-        
-        print(f"Generated video with overlay: {output_path}")
         return True
         
     except ffmpeg.Error as e:
