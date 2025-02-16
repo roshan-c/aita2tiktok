@@ -3,3 +3,5 @@ edge-tts
 torch --index-url https://download.pytorch.org/whl/cu118
 python-dotenv
 markdown
+Pillow
+moviepy

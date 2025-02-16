@@ -10,18 +10,26 @@ from edge_tts.exceptions import NoAudioReceived
 from pathlib import Path
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
+from moviepy.editor import (
+    VideoFileClip,
+    ImageClip,
+    concatenate_videoclips,
+)  # Import moviepy modules
 
 # Load environment variables
 load_dotenv()
 
 # --- Image Generation Configuration ---
 TEMPLATE_IMAGE = "template.png"  # Path to your template image
-FONT_PATH = "Arial.ttf"  # Path to your font file
+FONT_PATH = "arial.ttf"  # Path to your font file
 FONT_SIZE = 32
 TEXT_COLOR = (0, 0, 0)  # Black
 TEXT_POSITION = (50, 200)  # Top-left corner of the text area
 MAX_WIDTH = 700  # Maximum width of the text area
 OUTPUT_DIR = Path("output")
+VIDEO_TEMPLATE = "template.mp4"  # Path to your video template
+WORDS_PER_SECOND = 2.5  # Assumed reading speed (words per second)
+MIN_OVERLAY_DURATION = 2  # Minimum overlay duration in seconds
 
 
 def setup_reddit():
@@ -136,7 +144,6 @@ def text_wrap(text, font, max_width):
     lines = []
     # If the text is wider than the max_width, then split it into lines that are no
     # wider than the max_width.
-    # Use getlength instead of font.getsize
     if font.getlength(text) > max_width:
         # Get all the words in the text.
         words = text.split(" ")
@@ -149,7 +156,6 @@ def text_wrap(text, font, max_width):
             # If the test line is wider than the max_width, then add the line to
             # the lines array, set the line to equal the word, and continue to the
             # next word.
-            # Use getlength instead of font.getsize
             if font.getlength(test_line) > max_width:
                 lines.append(line)
                 line = word + " "
@@ -167,7 +173,6 @@ def text_wrap(text, font, max_width):
     return lines
 
 
-
 def generate_image(title, upvotes, comments, output_path):
     """Generate the image for the AITA story."""
     try:
@@ -180,11 +185,7 @@ def generate_image(title, upvotes, comments, output_path):
         y = TEXT_POSITION[1]
 
         for line in lines:
-            # Use getbbox instead of getsize
-            bbox = font.getbbox(line)
-            width = bbox[2] - bbox[0]  # Calculate width
-            height = bbox[3] - bbox[1]  # Calculate height
-
+            width, height = font.getsize(line)
             draw.text((TEXT_POSITION[0], y), line, fill=TEXT_COLOR, font=font)
             y += height  # Move to the next line
 
@@ -201,6 +202,28 @@ def generate_image(title, upvotes, comments, output_path):
         print(f"Error generating image: {e}")
 
 
+def create_video_with_overlay(image_path, video_path, output_path, duration):
+    """Overlays the image on the video for a specified duration."""
+    try:
+        # Load the video clip
+        video_clip = VideoFileClip(video_path)
+
+        # Load the image
+        image_clip = ImageClip(image_path).set_duration(duration)
+
+        # Composite the image on top of the video
+        final_clip = concatenate_videoclips([image_clip, video_clip])
+
+        # Write the final video to a file
+        final_clip.write_videofile(
+            output_path, fps=24, codec="libx264", audio_codec="aac"
+        )  # Adjust fps and codec as needed
+
+        print(f"Generated video with overlay: {output_path}")
+
+    except Exception as e:
+        print(f"Error creating video with overlay: {e}")
+
 
 async def process_story(story, index):
     """Process a single story asynchronously"""
@@ -216,6 +239,7 @@ async def process_story(story, index):
     audio_path = OUTPUT_DIR / f"{base_name}.mp3"
     subtitle_path = OUTPUT_DIR / f"{base_name}.txt"
     image_path = OUTPUT_DIR / f"{base_name}.png"
+    video_path = OUTPUT_DIR / f"{base_name}.mp4"  # Output video path
 
     try:
         await generate_tts_with_subtitles(full_text, audio_path, subtitle_path)
@@ -225,6 +249,17 @@ async def process_story(story, index):
         # Generate the image
         generate_image(
             story["title"], story["upvotes"], story["comments"], image_path
+        )
+
+        # Calculate overlay duration based on title length
+        num_words = len(story["title"].split())
+        overlay_duration = max(
+            num_words / WORDS_PER_SECOND, MIN_OVERLAY_DURATION
+        )  # Ensure a minimum duration
+
+        # Create the video with the image overlay
+        create_video_with_overlay(
+            image_path, VIDEO_TEMPLATE, video_path, overlay_duration
         )
 
     except Exception as e:
