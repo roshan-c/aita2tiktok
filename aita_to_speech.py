@@ -19,17 +19,20 @@ from moviepy import (
 # Load environment variables
 load_dotenv()
 
-# --- Image Generation Configuration ---
+# --- Configuration ---
 TEMPLATE_IMAGE = "template.png"
 FONT_PATH = "arial.ttf"
 FONT_SIZE = 32
 TEXT_COLOR = (0, 0, 0)
 TEXT_POSITION = (50, 200)
 MAX_WIDTH = 700
-BASE_OUTPUT_DIR = Path("output")  # Base output directory
+BASE_OUTPUT_DIR = Path("output")
 VIDEO_TEMPLATE = "template.mp4"
 WORDS_PER_SECOND = 2.5
-MIN_OVERLAY_DURATION = 2
+MIN_OVERLAY_DURATION = 3  # Minimum duration for title screen in seconds
+VIDEO_WIDTH = 1080  # TikTok preferred width
+VIDEO_HEIGHT = 1920  # TikTok preferred height
+VIDEO_FPS = 30  # Standard frame rate for TikTok
 
 # Create a timestamped output directory for this run
 CURRENT_RUN_DIR = BASE_OUTPUT_DIR / datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -214,25 +217,39 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
             print(f"Warning: Template video {video_path} not found. Skipping video creation.")
             return False
             
-        # Load the video clip
-        video_clip = VideoFileClip(video_path)
+        # Load the video clip and resize to TikTok dimensions
+        video_clip = (VideoFileClip(video_path)
+                     .resize(width=VIDEO_WIDTH)
+                     .resize(height=VIDEO_HEIGHT))
+        
+        # Load the image as a clip
+        image = (ImageClip(str(image_path))
+                .resize(width=VIDEO_WIDTH)
+                .resize(height=VIDEO_HEIGHT)
+                .set_duration(duration))
 
-        # Load the image
-        image_clip = ImageClip(image_path).set_duration(duration)
-
-        # Composite the image on top of the video
-        final_clip = concatenate_videoclips([image_clip, video_clip])
+        # Create the final clip by concatenating
+        final_clip = concatenate_videoclips([image, video_clip])
 
         # Write the final video to a file
         final_clip.write_videofile(
-            output_path, fps=24, codec="libx264", audio_codec="aac"
+            str(output_path),
+            fps=VIDEO_FPS,
+            codec="libx264",
+            audio_codec="aac"
         )
+        
+        # Clean up to prevent memory leaks
+        video_clip.close()
+        image.close()
+        final_clip.close()
 
         print(f"Generated video with overlay: {output_path}")
         return True
 
     except Exception as e:
         print(f"Error creating video with overlay: {e}")
+        traceback.print_exc()  # Print the full error traceback for debugging
         return False
 
 async def process_story(story, index):
