@@ -1,70 +1,84 @@
-# Reddit AITA to TikTok TTS Generator
+# AITA to TikTok Video Generator
 
-This project automates the process of converting Reddit AITA (Am I The Asshole?) stories into TTS (Text-to-Speech) audio files and story images for creating TikTok storytime videos. It fetches top stories from r/AmItheAsshole, generates high-quality TTS using Microsoft Edge's voice synthesis, creates corresponding subtitle files, and generates story images with titles and stats.
+An automated tool that converts Reddit's r/AmItheAsshole posts into TikTok-style videos with text-to-speech narration and dynamic subtitles.
 
 ## Features
 
 - Fetches top stories from r/AmItheAsshole subreddit
-- Converts text to speech using Microsoft Edge's natural-sounding voices
-- Generates synchronized subtitles for video creation
-- Processes multiple stories concurrently
-- Cleans and formats Reddit markdown text
-- Creates organized output with audio and subtitle files
-- Generates story images with titles, upvotes, and comment counts
-- Uses customizable template for consistent branding
+- Generates text-to-speech narration using Microsoft Edge TTS
+- Creates dynamic subtitles synchronized with speech
+- Generates thumbnail images with post titles and statistics
+- Produces vertical format videos (1080x1920) suitable for TikTok
+- Includes background video templates
+- Shows upvotes and comment counts in thumbnails
 
-## Prerequisites
+## Requirements
 
-- Python 3.7 or higher
-- A Reddit API account (for PRAW)
-- Arial.ttf font file (or another font of your choice)
-- template.png image file for story backgrounds
-
-## Required Files
-
-Before running the script, ensure you have:
-
-1. A font file (such as: Arial.ttf) in the project root directory
-2. A template.png file in the project root directory for the story image background
-   - Recommended dimensions: 1080x1920 pixels (9:16 ratio for TikTok)
-   - If you watch any TikTok AITA video, you will see they all use a similar image for their introduction. I took that and made my template using it.
+- Python 3.11+
+- Required Python packages (install via `pip install -r requirements.txt`):
+  - praw (Reddit API wrapper)
+  - markdown
+  - edge-tts
+  - python-dotenv
+  - Pillow
+  - moviepy
 
 ## Setup
 
-1. Clone this repository
-2. Install the required packages:
-   ```
+1. Install required dependencies:
+   ```bash
    pip install -r requirements.txt
    ```
-3. Create a `.env` file in the project root with your Reddit API credentials:
+
+2. Create a `.env` file with your Reddit API credentials:
    ```
    REDDIT_CLIENT_ID=your_client_id
    REDDIT_CLIENT_SECRET=your_client_secret
    ```
 
+3. Ensure you have the following files in your project directory:
+   - `template.png` - Template image for thumbnails
+   - `template.mp4` - Background video template
+   - `arial.ttf` - Arial font file for text rendering
+
 ## Usage
 
-1. Run the script:
-   ```
-   python aita_to_speech.py
-   ```
+Run the script to process the top AITA posts of the day:
 
-2. The script will:
-   - Create a new timestamped output folder (format: YYYYMMDD_HHMMSS)
-   - Fetch the top 10 AITA stories of the day
-   - Generate MP3 audio files using TTS
-   - Create corresponding subtitle files
-   - Generate story images with titles and stats
-   - Save everything in the newly created output directory
+```bash
+python aita_to_speech.py
+```
 
-3. Output files will be organized in: `output/YYYYMMDD_HHMMSS/`
-   - Audio: `story_title.mp3`
-   - Subtitles: `story_title.txt`
-   - Images: `story_title.png`
-   - Videos (if template.mp4 exists): `story_title.mp4`
+The script will:
+1. Fetch the top posts from r/AmItheAsshole
+2. Generate TTS audio for each post
+3. Create thumbnail images
+4. Generate videos with subtitles and background
+5. Save all outputs in timestamped folders under the `output/` directory
 
-The generated files can be used with video editing software to create TikTok storytime content.
+## Output Structure
 
-## Note
+Generated files are organized in timestamped folders:
+```
+output/
+└── YYYYMMDD_HHMMSS/
+    ├── post_title_timestamp.mp3 (audio)
+    ├── post_title_timestamp.json (subtitle data)
+    ├── post_title_timestamp.png (thumbnail)
+    └── post_title_timestamp.mp4 (final video)
+```
 
-Please ensure you comply with Reddit's content usage policies and TikTok's guidelines when creating and publishing content.
+## Configuration
+
+The script includes configurable parameters for:
+- Video dimensions (1080x1920)
+- Font sizes and colors
+- Text positioning
+- Frame rate
+- Output paths
+
+These can be modified in the `aita_to_speech.py` file.
+
+## Requirements
+
+See `requirements.txt` for a complete list of Python package dependencies.
