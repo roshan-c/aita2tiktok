@@ -7,13 +7,13 @@ import json
 import traceback
 import numpy as np
 import cv2
+import ffmpeg
 from datetime import datetime
 from edge_tts import Communicate
 from edge_tts.exceptions import NoAudioReceived
 from pathlib import Path
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
-import moviepy.editor as mpy
 
 # Load environment variables
 load_dotenv()
@@ -241,49 +241,68 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
         if not os.path.exists(video_path):
             print(f"Warning: Template video {video_path} not found. Skipping video creation.")
             return False
-            
-        # Load the video clip
-        video = mpy.VideoFileClip(video_path)
-        print(f"Original video dimensions: {video.w}x{video.h}")
+
+        # Create temporary image video with proper padding
+        temp_image_video = str(Path(output_path).parent / "temp_image.mp4")
         
-        # Load and prepare the image
-        img = Image.open(image_path)
-        img = img.convert('RGB')
-        img = img.resize((VIDEO_WIDTH, VIDEO_HEIGHT), Image.Resampling.LANCZOS)
-        img_array = np.array(img)
-        image = mpy.ImageClip(img_array).set_duration(duration)
-        
-        # First resize video to match target width
-        video = video.resize(width=VIDEO_WIDTH)
-        
-        # Then crop height if needed
-        if video.h > VIDEO_HEIGHT:
-            y1 = (video.h - VIDEO_HEIGHT) // 2
-            video = video.crop(y1=y1, y2=y1 + VIDEO_HEIGHT)
-            
-        print(f"Final video dimensions: {video.w}x{video.h}")
-        
-        # Create the final clip
-        final = mpy.concatenate_videoclips([image, video])
-        
-        # Write the final video
-        final.write_videofile(
-            str(output_path),
-            fps=VIDEO_FPS,
-            codec="libx264",
-            audio_codec="aac",
-            preset='ultrafast'  # Speed up encoding
+        # Convert image to video using ffmpeg with padding to maintain aspect ratio
+        (
+            ffmpeg
+            .input(str(image_path), loop=1, t=duration)
+            .filter('scale', f'{VIDEO_WIDTH}:-2')  # Scale width to target, maintain ratio
+            .filter('pad', VIDEO_WIDTH, VIDEO_HEIGHT, '(ow-iw)/2', '(oh-ih)/2')  # Center the image
+            .output(temp_image_video, vcodec='libx264', pix_fmt='yuv420p', r=VIDEO_FPS)
+            .overwrite_output()
+            .run(capture_stdout=True, capture_stderr=True)
         )
         
-        # Clean up
-        video.close()
-        image.close()
-        final.close()
-        img.close()
+        # Process template video with proper padding
+        (
+            ffmpeg
+            .input(video_path)
+            .filter('scale', f'{VIDEO_WIDTH}:-2')  # Scale width to target, maintain ratio
+            .filter('pad', VIDEO_WIDTH, VIDEO_HEIGHT, '(ow-iw)/2', '(oh-ih)/2')  # Center the video
+            .output('temp_main.mp4', vcodec='libx264', pix_fmt='yuv420p', r=VIDEO_FPS)
+            .overwrite_output()
+            .run(capture_stdout=True, capture_stderr=True)
+        )
+        
+        # Concatenate videos
+        input_list = str(Path(output_path).parent / 'concat.txt')
+        with open(input_list, 'w') as f:
+            f.write(f"file '{os.path.basename(temp_image_video)}'\n")
+            f.write("file 'temp_main.mp4'\n")
+            
+        # Change working directory to where the temp files are
+        original_cwd = os.getcwd()
+        os.chdir(Path(output_path).parent)
+        
+        try:
+            (
+                ffmpeg
+                .input(input_list, f='concat', safe=0)
+                .output(str(output_path), c='copy')
+                .overwrite_output()
+                .run(capture_stdout=True, capture_stderr=True)
+            )
+        finally:
+            # Restore working directory
+            os.chdir(original_cwd)
+        
+        # Clean up temporary files
+        try:
+            os.remove(temp_image_video)
+            os.remove(Path(output_path).parent / 'temp_main.mp4')
+            os.remove(input_list)
+        except Exception as e:
+            print(f"Warning: Could not remove temporary files: {e}")
         
         print(f"Generated video with overlay: {output_path}")
         return True
         
+    except ffmpeg.Error as e:
+        print(f"FFmpeg error: {e.stderr.decode() if hasattr(e, 'stderr') else str(e)}")
+        return False
     except Exception as e:
         print(f"Error creating video with overlay: {e}")
         traceback.print_exc()
