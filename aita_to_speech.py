@@ -352,25 +352,35 @@ async def upload_to_tiktok(video_path, title):
     try:
         caption = generate_tiktok_caption(title)
         
-        # Get TikTok credentials from environment variables
+        # Get TikTok session ID and update cookies file
         session_id = os.getenv('TIKTOK_SESSION_ID')
         if not session_id:
             print("TikTok session ID not found in environment variables")
             return False
             
-        cookies = {
-            'sessionid': session_id,
-        }
+        # Update the cookies file with the current session ID and required fields
+        cookies_file = Path("tiktok_cookies.txt")
+        cookie_data = [{
+            "domain": "www.tiktok.com",
+            "name": "sessionid",
+            "path": "/",
+            "value": session_id
+        }]
+        
+        with open(cookies_file, "w", encoding="utf-8") as f:
+            json.dump(cookie_data, f, indent=4)
         
         # Convert video path to string if it's a Path object
         video_path_str = str(video_path)
         
-        # Upload the video
-        # Note: cookies parameter expects a dict[str, str] format
+        print(f"Uploading video with caption: {caption}")
+        print(f"Using cookies file: {cookies_file}")
+        
+        # Upload the video using the cookies file
         upload_success = upload_video(
             video_path_str,
             description=caption,
-            cookies=cookies
+            cookies=str(cookies_file)
         )
         
         if upload_success:
@@ -382,7 +392,7 @@ async def upload_to_tiktok(video_path, title):
             
     except Exception as e:
         print(f"Error uploading to TikTok: {str(e)}")
-        traceback.print_exc()  # Print full traceback for debugging
+        traceback.print_exc()
         return False
 
 
