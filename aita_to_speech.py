@@ -14,22 +14,25 @@ from moviepy import (
     VideoFileClip,
     ImageClip,
     concatenate_videoclips,
-)  # Import moviepy modules
+)
 
 # Load environment variables
 load_dotenv()
 
 # --- Image Generation Configuration ---
-TEMPLATE_IMAGE = "template.png"  # Path to your template image
-FONT_PATH = "arial.ttf"  # Path to your font file
+TEMPLATE_IMAGE = "template.png"
+FONT_PATH = "arial.ttf"
 FONT_SIZE = 32
-TEXT_COLOR = (0, 0, 0)  # Black
-TEXT_POSITION = (50, 200)  # Top-left corner of the text area
-MAX_WIDTH = 700  # Maximum width of the text area
-OUTPUT_DIR = Path("output")
-VIDEO_TEMPLATE = "template.mp4"  # Path to your video template
-WORDS_PER_SECOND = 2.5  # Assumed reading speed (words per second)
-MIN_OVERLAY_DURATION = 2  # Minimum overlay duration in seconds
+TEXT_COLOR = (0, 0, 0)
+TEXT_POSITION = (50, 200)
+MAX_WIDTH = 700
+BASE_OUTPUT_DIR = Path("output")  # Base output directory
+VIDEO_TEMPLATE = "template.mp4"
+WORDS_PER_SECOND = 2.5
+MIN_OVERLAY_DURATION = 2
+
+# Create a timestamped output directory for this run
+CURRENT_RUN_DIR = BASE_OUTPUT_DIR / datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 def setup_reddit():
@@ -240,13 +243,12 @@ async def process_story(story, index):
     full_text = f"{story['title']}. {story['text']}"
 
     # Generate output filenames using the sanitized title
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_title = sanitize_filename(story["title"])
-    base_name = f"{safe_title}_{timestamp}"
-    audio_path = OUTPUT_DIR / f"{base_name}.mp3"
-    subtitle_path = OUTPUT_DIR / f"{base_name}.txt"
-    image_path = OUTPUT_DIR / f"{base_name}.png"
-    video_path = OUTPUT_DIR / f"{base_name}.mp4"  # Output video path
+    base_name = safe_title  # No need for timestamp in filename since we have timestamped folder
+    audio_path = CURRENT_RUN_DIR / f"{base_name}.mp3"
+    subtitle_path = CURRENT_RUN_DIR / f"{base_name}.txt"
+    image_path = CURRENT_RUN_DIR / f"{base_name}.png"
+    video_path = CURRENT_RUN_DIR / f"{base_name}.mp4"
 
     try:
         await generate_tts_with_subtitles(full_text, audio_path, subtitle_path)
@@ -277,8 +279,12 @@ async def process_story(story, index):
 
 
 async def main_async():
-    # Create output directory
-    OUTPUT_DIR.mkdir(exist_ok=True)
+    # Create base output directory if it doesn't exist
+    BASE_OUTPUT_DIR.mkdir(exist_ok=True)
+    # Create timestamped directory for this run
+    CURRENT_RUN_DIR.mkdir(exist_ok=True)
+    
+    print(f"Output directory for this run: {CURRENT_RUN_DIR}")
 
     # Setup Reddit client
     reddit = setup_reddit()

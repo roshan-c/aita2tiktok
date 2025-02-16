@@ -50,16 +50,18 @@ Before running the script, ensure you have:
    ```
 
 2. The script will:
+   - Create a new timestamped output folder (format: YYYYMMDD_HHMMSS)
    - Fetch the top 10 AITA stories of the day
    - Generate MP3 audio files using TTS
    - Create corresponding subtitle files
    - Generate story images with titles and stats
-   - Save everything in the `output` directory
+   - Save everything in the newly created output directory
 
-3. Output files are named using the format:
-   - Audio: `story_title_YYYYMMDD_HHMMSS.mp3`
-   - Subtitles: `story_title_YYYYMMDD_HHMMSS.txt`
-   - Images: `story_title_YYYYMMDD_HHMMSS.png`
+3. Output files will be organized in: `output/YYYYMMDD_HHMMSS/`
+   - Audio: `story_title.mp3`
+   - Subtitles: `story_title.txt`
+   - Images: `story_title.png`
+   - Videos (if template.mp4 exists): `story_title.mp4`
 
 The generated files can be used with video editing software to create TikTok storytime content.
 
