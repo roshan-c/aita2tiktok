@@ -5,6 +5,7 @@ import re
 import asyncio
 import json
 import traceback
+import numpy as np
 from datetime import datetime
 from edge_tts import Communicate
 from edge_tts.exceptions import NoAudioReceived
@@ -202,7 +203,7 @@ def ensure_tiktok_dimensions(clip, target_width=1080, target_height=1920):
     current_ratio = clip.size[0] / clip.size[1]
     target_ratio = target_width / target_height
     
-    if current_ratio > target_ratio:  # Too wide
+    if (current_ratio > target_ratio):  # Too wide
         new_width = int(clip.size[1] * target_ratio)
         new_height = clip.size[1]
     else:  # Too tall
