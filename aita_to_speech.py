@@ -292,27 +292,28 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
         ffmpeg_path = find_ffmpeg_path()
         if not ffmpeg_path:
             return False
-            
+
         if not os.path.exists(video_path):
             print(f"Warning: Template video {video_path} not found. Skipping video creation.")
             return False
 
         temp_dir = Path(output_path).parent
-        temp_image_video = str(temp_dir / "temp_image.mp4")
-        temp_main_video = str(temp_dir / "temp_main.mp4")
-        
+        temp_image_video = temp_dir / "temp_image.mp4"
+        temp_main_video = temp_dir / "temp_main.mp4"
+        concat_file = temp_dir / 'concat.txt'  # Store as Path object
+
         print(f"Processing image: {image_path}")
         print(f"Using ffmpeg from: {ffmpeg_path}")
         print(f"Target dimensions: {VIDEO_WIDTH}x{VIDEO_HEIGHT}")
-        
+
         try:
             import subprocess
             import shlex
-            
+
             def quote_path(path):
                 """Quote path for Windows command line"""
                 return f'"{path}"' if ' ' in str(path) else str(path)
-            
+
             def run_ffmpeg(cmd_args, desc):
                 """Run ffmpeg command with proper error handling"""
                 try:
@@ -329,7 +330,7 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
                     if e.stdout: print(f"Standard output:\n{e.stdout}")
                     if e.stderr: print(f"Error output:\n{e.stderr}")
                     raise
-            
+
             # Convert image to video
             run_ffmpeg([
                 '-y',
@@ -341,9 +342,9 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
                 '-preset', 'ultrafast',
                 '-tune', 'stillimage',
                 '-pix_fmt', 'yuv420p',
-                temp_image_video
+                str(temp_image_video)
             ], "image conversion")
-            
+
             # Process template video
             run_ffmpeg([
                 '-y',
@@ -352,32 +353,31 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
                 '-c:v', 'libx264',
                 '-preset', 'ultrafast',
                 '-pix_fmt', 'yuv420p',
-                temp_main_video
+                str(temp_main_video)
             ], "video processing")
-            
+
             # Create concat file
-            concat_file = temp_dir / 'concat.txt'
             with open(concat_file, 'w', encoding='utf-8') as f:
-                f.write(f"file '{os.path.basename(temp_image_video)}'\n")
-                f.write(f"file '{os.path.basename(temp_main_video)}'\n")
-            
+                f.write(f"file '{temp_image_video.name}'\n")  # Use just the filename
+                f.write(f"file '{temp_main_video.name}'\n")  # Use just the filename
+
             # Change directory for concat operation
             original_cwd = os.getcwd()
             os.chdir(temp_dir)
-            
+
             try:
                 # Concatenate videos
                 run_ffmpeg([
                     '-y',
                     '-f', 'concat',
                     '-safe', '0',
-                    '-i', str(concat_file),
+                    '-i', str(concat_file.name),  # Use just the filename
                     '-c', 'copy',
-                    str(output_path)
+                    quote_path(os.path.basename(output_path))  # Output filename only
                 ], "video concatenation")
             finally:
                 os.chdir(original_cwd)
-                
+
             # Clean up
             for temp_file in [temp_image_video, temp_main_video, concat_file]:
                 try:
@@ -385,9 +385,9 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
                         os.remove(temp_file)
                 except Exception as e:
                     print(f"Warning: Could not remove temporary file {temp_file}: {e}")
-            
+
             return True
-            
+
         except subprocess.CalledProcessError as e:
             print(f"FFmpeg command failed: {e}")
             return False
@@ -395,11 +395,12 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
             print(f"Unexpected error: {e}")
             traceback.print_exc()
             return False
-            
+
     except Exception as e:
         print(f"Error creating video with overlay: {e}")
         traceback.print_exc()
         return False
+
 
 async def process_story(story, index):
     """Process a single story asynchronously"""
