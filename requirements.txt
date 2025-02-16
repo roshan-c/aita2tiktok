@@ -6,3 +6,5 @@ markdown
 Pillow
 moviepy
 imageio-ffmpeg
+opencv-python
+numpy

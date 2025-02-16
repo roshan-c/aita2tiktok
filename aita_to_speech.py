@@ -6,6 +6,7 @@ import asyncio
 import json
 import traceback
 import numpy as np
+import cv2
 from datetime import datetime
 from edge_tts import Communicate
 from edge_tts.exceptions import NoAudioReceived
@@ -212,6 +213,28 @@ def ensure_tiktok_dimensions(clip, target_width=1080, target_height=1920):
     
     return clip.resize(width=new_width, height=new_height)
 
+def resize_image_for_tiktok(image_path):
+    """Resize image to match TikTok dimensions while maintaining aspect ratio"""
+    img = cv2.imread(str(image_path))
+    height, width = img.shape[:2]
+    
+    # Calculate scaling factor to fit TikTok dimensions
+    scale = max(VIDEO_WIDTH/width, VIDEO_HEIGHT/height)
+    new_width = int(width * scale)
+    new_height = int(height * scale)
+    
+    # Resize image
+    resized = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_LANCZOS4)
+    
+    # Calculate cropping coordinates to center the image
+    start_x = (new_width - VIDEO_WIDTH) // 2 if new_width > VIDEO_WIDTH else 0
+    start_y = (new_height - VIDEO_HEIGHT) // 2 if new_height > VIDEO_HEIGHT else 0
+    
+    # Crop to TikTok dimensions
+    cropped = resized[start_y:start_y+VIDEO_HEIGHT, start_x:start_x+VIDEO_WIDTH]
+    
+    return cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
+
 def create_video_with_overlay(image_path, video_path, output_path, duration):
     """Overlays the image on the video for a specified duration."""
     try:
@@ -219,46 +242,25 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
             print(f"Warning: Template video {video_path} not found. Skipping video creation.")
             return False
             
-        # Load the video clip
-        video_clip = mpy.VideoFileClip(video_path)
-        print(f"Original video dimensions: {video_clip.w}x{video_clip.h}")
+        # Load and process the image using OpenCV
+        image_array = resize_image_for_tiktok(image_path)
+        image = mpy.ImageClip(image_array).set_duration(duration)
         
-        # Calculate new dimensions while maintaining aspect ratio
-        video_aspect = video_clip.w / video_clip.h
-        target_aspect = VIDEO_WIDTH / VIDEO_HEIGHT
-        print(f"Original aspect ratio: {video_aspect:.2f}, Target aspect ratio: {target_aspect:.2f}")
+        # Load the video
+        video = mpy.VideoFileClip(video_path)
+        print(f"Original video dimensions: {video.w}x{video.h}")
         
-        if video_aspect > target_aspect:  # Too wide
-            new_width = int(video_clip.h * target_aspect)
-            print(f"Video too wide. Cropping width to: {new_width}")
-            video_clip = video_clip.crop(x1=(video_clip.w - new_width)/2, 
-                                       y1=0, 
-                                       x2=(video_clip.w + new_width)/2, 
-                                       y2=video_clip.h)
-        else:  # Too tall
-            new_height = int(video_clip.w / target_aspect)
-            print(f"Video too tall. Cropping height to: {new_height}")
-            video_clip = video_clip.crop(x1=0,
-                                       y1=(video_clip.h - new_height)/2,
-                                       x2=video_clip.w,
-                                       y2=(video_clip.h + new_height)/2)
-        
-        print(f"After cropping video dimensions: {video_clip.w}x{video_clip.h}")
-        
-        # Load and resize the image, manually handling the resizing to avoid moviepy's PIL resize
-        pil_image = Image.open(str(image_path))
-        pil_image = pil_image.resize((VIDEO_WIDTH, VIDEO_HEIGHT), Image.Resampling.LANCZOS)
-        # Convert PIL image to numpy array for moviepy
-        image_array = np.array(pil_image)
-        image = mpy.ImageClip(image_array)
-        image = image.set_duration(duration)
+        # Resize video to match TikTok dimensions
+        video = video.resize(width=VIDEO_WIDTH)
+        if video.h > VIDEO_HEIGHT:
+            video = video.crop(y_center=video.h/2, height=VIDEO_HEIGHT)
+        print(f"Processed video dimensions: {video.w}x{video.h}")
 
-        # Create the final clip by concatenating
-        final_clip = mpy.concatenate_videoclips([image, video_clip])
-        print(f"Final video dimensions: {final_clip.w}x{final_clip.h}")
-
-        # Write the final video
-        final_clip.write_videofile(
+        # Concatenate clips
+        final = mpy.concatenate_videoclips([image, video])
+        
+        # Write final video
+        final.write_videofile(
             str(output_path),
             fps=VIDEO_FPS,
             codec="libx264",
@@ -266,13 +268,13 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
         )
         
         # Clean up
-        video_clip.close()
+        video.close()
         image.close()
-        final_clip.close()
-
+        final.close()
+        
         print(f"Generated video with overlay: {output_path}")
         return True
-
+        
     except Exception as e:
         print(f"Error creating video with overlay: {e}")
         traceback.print_exc()
