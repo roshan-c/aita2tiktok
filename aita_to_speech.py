@@ -242,35 +242,44 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
             print(f"Warning: Template video {video_path} not found. Skipping video creation.")
             return False
             
-        # Load and process the image using OpenCV
-        image_array = resize_image_for_tiktok(image_path)
-        image = mpy.ImageClip(image_array).set_duration(duration)
-        
-        # Load the video
+        # Load the video clip
         video = mpy.VideoFileClip(video_path)
         print(f"Original video dimensions: {video.w}x{video.h}")
         
-        # Resize video to match TikTok dimensions
+        # Load and prepare the image
+        img = Image.open(image_path)
+        img = img.convert('RGB')
+        img = img.resize((VIDEO_WIDTH, VIDEO_HEIGHT), Image.Resampling.LANCZOS)
+        img_array = np.array(img)
+        image = mpy.ImageClip(img_array).set_duration(duration)
+        
+        # First resize video to match target width
         video = video.resize(width=VIDEO_WIDTH)
+        
+        # Then crop height if needed
         if video.h > VIDEO_HEIGHT:
-            video = video.crop(y_center=video.h/2, height=VIDEO_HEIGHT)
-        print(f"Processed video dimensions: {video.w}x{video.h}")
-
-        # Concatenate clips
+            y1 = (video.h - VIDEO_HEIGHT) // 2
+            video = video.crop(y1=y1, y2=y1 + VIDEO_HEIGHT)
+            
+        print(f"Final video dimensions: {video.w}x{video.h}")
+        
+        # Create the final clip
         final = mpy.concatenate_videoclips([image, video])
         
-        # Write final video
+        # Write the final video
         final.write_videofile(
             str(output_path),
             fps=VIDEO_FPS,
             codec="libx264",
-            audio_codec="aac"
+            audio_codec="aac",
+            preset='ultrafast'  # Speed up encoding
         )
         
         # Clean up
         video.close()
         image.close()
         final.close()
+        img.close()
         
         print(f"Generated video with overlay: {output_path}")
         return True

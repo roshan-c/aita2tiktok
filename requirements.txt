@@ -3,8 +3,9 @@ edge-tts
 torch --index-url https://download.pytorch.org/whl/cu118
 python-dotenv
 markdown
-Pillow
-moviepy
-imageio-ffmpeg
+Pillow==10.4.0
+moviepy==1.0.3
+imageio-ffmpeg==0.4.9
 opencv-python
 numpy
+decorator==4.4.2
