@@ -5,3 +5,4 @@ python-dotenv
 markdown
 Pillow
 moviepy
+imageio-ffmpeg
