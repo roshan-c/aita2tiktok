@@ -238,30 +238,59 @@ def resize_image_for_tiktok(image_path):
     
     return cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
 
+def find_ffmpeg_path():
+    """Find the ffmpeg executable path on Windows"""
+    try:
+        # Common installation paths
+        paths_to_check = [
+            os.environ.get('PROGRAMFILES', '') + '\\ffmpeg\\bin\\ffmpeg.exe',
+            os.environ.get('PROGRAMFILES(X86)', '') + '\\ffmpeg\\bin\\ffmpeg.exe',
+            os.environ.get('LOCALAPPDATA', '') + '\\Microsoft\\WindowsApps\\ffmpeg.exe',
+            'C:\\ffmpeg\\bin\\ffmpeg.exe',
+            'ffmpeg.exe'  # Check in PATH
+        ]
+        
+        # Try to find ffmpeg in common locations
+        for path in paths_to_check:
+            if os.path.isfile(path):
+                return path
+                
+        # If not found in common locations, try using where.exe
+        try:
+            import subprocess
+            result = subprocess.run(['where', 'ffmpeg'], capture_output=True, text=True, check=True)
+            if result.stdout:
+                return result.stdout.strip().split('\n')[0]
+        except:
+            pass
+            
+        return None
+    except Exception as e:
+        print(f"Error finding ffmpeg path: {e}")
+        return None
+
 def ensure_ffmpeg():
     """Ensure ffmpeg is available on the system"""
-    try:
-        # Test ffmpeg availability
-        (
-            ffmpeg
-            .input('nullinput', f='lavfi', t=1)
-            .output('null', f='null')
-            .global_args('-v', 'error')
-            .run(capture_stdout=True, capture_stderr=True)
-        )
-        return True
-    except ffmpeg.Error:
-        print("FFmpeg not found. Please install FFmpeg and make sure it's in your system PATH.")
-        print("You can download it from: https://ffmpeg.org/download.html")
-        return False
-    except Exception as e:
-        print(f"Error checking FFmpeg: {e}")
-        return False
+    ffmpeg_path = find_ffmpeg_path()
+    if ffmpeg_path:
+        print(f"Found ffmpeg at: {ffmpeg_path}")
+        try:
+            import subprocess
+            result = subprocess.run([ffmpeg_path, '-version'], capture_output=True, text=True)
+            if 'ffmpeg version' in result.stdout or 'ffmpeg version' in result.stderr:
+                return True
+        except Exception as e:
+            print(f"Error running ffmpeg: {e}")
+    
+    print("FFmpeg not found or not accessible.")
+    print("Please ensure ffmpeg is installed and in your system PATH.")
+    return False
 
 def create_video_with_overlay(image_path, video_path, output_path, duration):
     """Overlays the image on the video for a specified duration."""
     try:
-        if not ensure_ffmpeg():
+        ffmpeg_path = find_ffmpeg_path()
+        if not ffmpeg_path:
             return False
             
         if not os.path.exists(video_path):
@@ -273,114 +302,100 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
         temp_main_video = str(temp_dir / "temp_main.mp4")
         
         print(f"Processing image: {image_path}")
+        print(f"Using ffmpeg from: {ffmpeg_path}")
         print(f"Target dimensions: {VIDEO_WIDTH}x{VIDEO_HEIGHT}")
         
-        # Probe image dimensions
-        img = Image.open(image_path)
-        print(f"Original image dimensions: {img.size}")
-        img.close()
-        
-        # Enhanced filter chain for better aspect ratio handling
-        filter_chain = [
-            f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=decrease',  # Scale while maintaining aspect ratio
-            f'pad={VIDEO_WIDTH}:{VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black@1',  # Center with black padding
-            'setsar=1',  # Set square pixels
-            'fps=' + str(VIDEO_FPS)  # Ensure consistent framerate
-        ]
-        
-        print("Converting image to video...")
-        # Convert image to video
-        (
-            ffmpeg
-            .input(str(image_path), loop=1, t=duration)
-            .filter_multi_output(filter_chain)
-            .output(
-                temp_image_video,
-                vcodec='libx264',
-                preset='ultrafast',
-                pix_fmt='yuv420p',
-                r=VIDEO_FPS
-            )
-            .overwrite_output()
-            .global_args('-hide_banner')
-            .run(capture_stdout=True, capture_stderr=True)
-        )
-        print("Image conversion completed")
-        
-        # Probe video dimensions
-        probe = ffmpeg.probe(video_path)
-        video_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
-        print(f"Original video dimensions: {video_info['width']}x{video_info['height']}")
-        
-        print(f"Processing template video: {video_path}")
-        # Process template video with same filter chain
-        (
-            ffmpeg
-            .input(video_path)
-            .filter_multi_output(filter_chain)
-            .output(
-                temp_main_video,
-                vcodec='libx264',
-                preset='ultrafast',
-                pix_fmt='yuv420p',
-                r=VIDEO_FPS
-            )
-            .overwrite_output()
-            .global_args('-hide_banner')
-            .run(capture_stdout=True, capture_stderr=True)
-        )
-        print("Video processing completed")
-        
-        # Create concat file
-        concat_file = temp_dir / 'concat.txt'
-        with open(concat_file, 'w', encoding='utf-8') as f:
-            f.write(f"file '{os.path.basename(temp_image_video)}'\n")
-            f.write(f"file '{os.path.basename(temp_main_video)}'\n")
-            
-        print("Concatenating videos...")
-        original_cwd = os.getcwd()
-        os.chdir(temp_dir)
-        
         try:
-            # Concatenate with consistent settings
-            (
-                ffmpeg
-                .input(str(concat_file), f='concat', safe=0)
-                .output(
-                    str(output_path),
-                    vcodec='libx264',
-                    preset='ultrafast',
-                    pix_fmt='yuv420p',
-                    r=VIDEO_FPS,
-                    acodec='aac'
-                )
-                .overwrite_output()
-                .global_args('-hide_banner')
-                .run(capture_stdout=True, capture_stderr=True)
-            )
-            print(f"Final video created: {output_path}")
+            import subprocess
+            import shlex
             
-            # Verify final video dimensions
-            probe = ffmpeg.probe(output_path)
-            final_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
-            print(f"Final video dimensions: {final_info['width']}x{final_info['height']}")
+            def quote_path(path):
+                """Quote path for Windows command line"""
+                return f'"{path}"' if ' ' in str(path) else str(path)
             
-        finally:
-            os.chdir(original_cwd)
-            # Clean up temporary files
+            def run_ffmpeg(cmd_args, desc):
+                """Run ffmpeg command with proper error handling"""
+                try:
+                    cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'info'] + cmd_args
+                    print(f"\nRunning {desc}:")
+                    print(" ".join(map(quote_path, cmd)))
+                    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                    if result.stdout:
+                        print(f"Output: {result.stdout}")
+                    return True
+                except subprocess.CalledProcessError as e:
+                    print(f"Error during {desc}:")
+                    print(f"Command failed with code {e.returncode}")
+                    if e.stdout: print(f"Standard output:\n{e.stdout}")
+                    if e.stderr: print(f"Error output:\n{e.stderr}")
+                    raise
+            
+            # Convert image to video
+            run_ffmpeg([
+                '-y',
+                '-loop', '1',
+                '-t', str(duration),
+                '-i', str(image_path),
+                '-vf', f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=decrease,pad={VIDEO_WIDTH}:{VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2',
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',
+                '-tune', 'stillimage',
+                '-pix_fmt', 'yuv420p',
+                temp_image_video
+            ], "image conversion")
+            
+            # Process template video
+            run_ffmpeg([
+                '-y',
+                '-i', video_path,
+                '-vf', f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=decrease,pad={VIDEO_WIDTH}:{VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2',
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',
+                '-pix_fmt', 'yuv420p',
+                temp_main_video
+            ], "video processing")
+            
+            # Create concat file
+            concat_file = temp_dir / 'concat.txt'
+            with open(concat_file, 'w', encoding='utf-8') as f:
+                f.write(f"file '{os.path.basename(temp_image_video)}'\n")
+                f.write(f"file '{os.path.basename(temp_main_video)}'\n")
+            
+            # Change directory for concat operation
+            original_cwd = os.getcwd()
+            os.chdir(temp_dir)
+            
+            try:
+                # Concatenate videos
+                run_ffmpeg([
+                    '-y',
+                    '-f', 'concat',
+                    '-safe', '0',
+                    '-i', str(concat_file),
+                    '-c', 'copy',
+                    str(output_path)
+                ], "video concatenation")
+            finally:
+                os.chdir(original_cwd)
+                
+            # Clean up
             for temp_file in [temp_image_video, temp_main_video, concat_file]:
                 try:
                     if os.path.exists(temp_file):
                         os.remove(temp_file)
                 except Exception as e:
                     print(f"Warning: Could not remove temporary file {temp_file}: {e}")
-        
-        return True
-        
-    except ffmpeg.Error as e:
-        stderr = e.stderr.decode() if hasattr(e, 'stderr') and e.stderr else str(e)
-        print(f"FFmpeg error: {stderr}")
-        return False
+            
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            print(f"FFmpeg command failed: {e}")
+            return False
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            traceback.print_exc()
+            return False
+            
     except Exception as e:
         print(f"Error creating video with overlay: {e}")
         traceback.print_exc()
