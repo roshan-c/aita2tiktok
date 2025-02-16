@@ -39,11 +39,11 @@ MAX_WIDTH = 700  # Maximum width of the text area
 # --- Video Generation Configuration ---
 FONT_SIZE_VIDEO = 72  # Increased font size for video
 TEXT_COLOR_VIDEO = "white"  # Changed to string
-BG_COLOR = "yellow"  # Background color for text
+BG_COLOR = "black"  # Background color for text
 BASE_OUTPUT_DIR = Path("output")
-VIDEO_WIDTH = 1280
-VIDEO_HEIGHT = 720
-FRAME_RATE = 24
+VIDEO_WIDTH = 1080
+VIDEO_HEIGHT = 1920
+FRAME_RATE = 30
 TEMPLATE_VIDEO = "template.mp4"  # Background video
 
 
