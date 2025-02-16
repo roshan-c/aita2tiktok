@@ -10,7 +10,15 @@ from edge_tts.exceptions import NoAudioReceived
 from pathlib import Path
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
-from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
+try:
+    from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
+except ImportError:
+    print("Trying alternative import...")
+    import moviepy.editor as mpy
+    VideoFileClip = mpy.VideoFileClip
+    AudioFileClip = mpy.AudioFileClip
+    TextClip = mpy.TextClip
+    CompositeVideoClip = mpy.CompositeVideoClip
 import subprocess
 
 # Load environment variables
