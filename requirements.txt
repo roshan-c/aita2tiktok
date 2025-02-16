@@ -1,11 +1,9 @@
 praw
-edge-tts
-torch --index-url https://download.pytorch.org/whl/cu118
-python-dotenv
 markdown
-Pillow==10.4.0
-ffmpeg-python
-opencv-python
-numpy
-decorator==4.4.2
-moviepy
+edge-tts
+python-dotenv
+Pillow>=10.4.0
+moviepy>=1.0.3
+ffmpeg-python  # Required for video processing
+decorator>=4.4.2  # Required by moviepy
+numpy  # Required by moviepy and Pillow
