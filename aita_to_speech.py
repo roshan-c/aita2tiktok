@@ -21,7 +21,7 @@ FONT_SIZE = 32
 TEXT_COLOR = (0, 0, 0)  # Black
 TEXT_POSITION = (50, 200)  # Top-left corner of the text area
 MAX_WIDTH = 700  # Maximum width of the text area
-OUTPUT_DIR = Path("output")
+BASE_OUTPUT_DIR = Path("output")
 
 
 def setup_reddit():
@@ -167,7 +167,6 @@ def text_wrap(text, font, max_width):
     return lines
 
 
-
 def generate_image(title, upvotes, comments, output_path):
     """Generate the image for the AITA story."""
     try:
@@ -201,8 +200,7 @@ def generate_image(title, upvotes, comments, output_path):
         print(f"Error generating image: {e}")
 
 
-
-async def process_story(story, index):
+async def process_story(story, index, output_dir):
     """Process a single story asynchronously"""
     print(f"Processing story {index}/10: {story['title'][:50]}...")
 
@@ -213,9 +211,9 @@ async def process_story(story, index):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_title = sanitize_filename(story["title"])
     base_name = f"{safe_title}_{timestamp}"
-    audio_path = OUTPUT_DIR / f"{base_name}.mp3"
-    subtitle_path = OUTPUT_DIR / f"{base_name}.txt"
-    image_path = OUTPUT_DIR / f"{base_name}.png"
+    audio_path = output_dir / f"{base_name}.mp3"
+    subtitle_path = output_dir / f"{base_name}.txt"
+    image_path = output_dir / f"{base_name}.png"
 
     try:
         await generate_tts_with_subtitles(full_text, audio_path, subtitle_path)
@@ -232,8 +230,10 @@ async def process_story(story, index):
 
 
 async def main_async():
-    # Create output directory
-    OUTPUT_DIR.mkdir(exist_ok=True)
+    # Create a new output directory based on timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = BASE_OUTPUT_DIR / timestamp
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Setup Reddit client
     reddit = setup_reddit()
@@ -245,7 +245,7 @@ async def main_async():
     # Process stories concurrently
     tasks = []
     for i, story in enumerate(stories, 1):
-        tasks.append(process_story(story, i))
+        tasks.append(process_story(story, i, output_dir))
 
     await asyncio.gather(*tasks)
 
