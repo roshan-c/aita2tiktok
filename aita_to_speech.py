@@ -293,8 +293,7 @@ async def process_story(story, index, base_output_dir):
             word_clips.append(word_clip)
 
         # Combine video with audio and word clips
-        final_video = CompositeVideoClip([video] + word_clips,
-                                         use_mask=True)  # Use mask
+        final_video = CompositeVideoClip([video] + word_clips)
         final_video = final_video.set_audio(audio)
 
         # Write the final video
