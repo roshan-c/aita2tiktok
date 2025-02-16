@@ -132,10 +132,7 @@ async def generate_tts_with_subtitles(text, audio_path, subtitle_path):
 
 def format_timestamp(seconds):
     """Convert seconds to HH:MM:SS.mmm format"""
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    seconds_remainder = seconds % 60
-    return f"{hours:02d}:{minutes:02d}:{seconds_remainder:06.3f}"
+    return f"{seconds:.3f}"  # Returns just the seconds as a float string
 
 
 def sanitize_filename(title):
@@ -270,8 +267,8 @@ async def process_story(story, index, output_dir):
         # Create word clips
         word_clips = []
         for sub in subtitles:
-            start_time = float(sub['start'].replace(":", "."))
-            end_time = float(sub['end'].replace(":", "."))
+            start_time = float(sub['start'])
+            end_time = float(sub['end'])
             word = sub['text']
 
             word_clip = (
