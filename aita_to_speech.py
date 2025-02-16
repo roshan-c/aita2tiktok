@@ -242,47 +242,52 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
             print(f"Warning: Template video {video_path} not found. Skipping video creation.")
             return False
 
-        # Create temporary image video with proper padding
-        temp_image_video = str(Path(output_path).parent / "temp_image.mp4")
+        temp_dir = Path(output_path).parent
+        temp_image_video = str(temp_dir / "temp_image.mp4")
+        temp_main_video = str(temp_dir / "temp_main.mp4")
         
-        # Convert image to video using ffmpeg with padding to maintain aspect ratio
+        # Convert image to video using ffmpeg with force_original_aspect_ratio
         (
             ffmpeg
             .input(str(image_path), loop=1, t=duration)
-            .filter('scale', f'{VIDEO_WIDTH}:-2')  # Scale width to target, maintain ratio
-            .filter('pad', VIDEO_WIDTH, VIDEO_HEIGHT, '(ow-iw)/2', '(oh-ih)/2')  # Center the image
+            .filter('scale', f'{VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=decrease')
+            .filter('pad', VIDEO_WIDTH, VIDEO_HEIGHT, '(ow-iw)/2', '(oh-ih)/2', color='black')
             .output(temp_image_video, vcodec='libx264', pix_fmt='yuv420p', r=VIDEO_FPS)
             .overwrite_output()
+            .global_args('-loglevel', 'error')
             .run(capture_stdout=True, capture_stderr=True)
         )
         
-        # Process template video with proper padding
+        # Process template video with the same filter chain
         (
             ffmpeg
             .input(video_path)
-            .filter('scale', f'{VIDEO_WIDTH}:-2')  # Scale width to target, maintain ratio
-            .filter('pad', VIDEO_WIDTH, VIDEO_HEIGHT, '(ow-iw)/2', '(oh-ih)/2')  # Center the video
-            .output('temp_main.mp4', vcodec='libx264', pix_fmt='yuv420p', r=VIDEO_FPS)
+            .filter('scale', f'{VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=decrease')
+            .filter('pad', VIDEO_WIDTH, VIDEO_HEIGHT, '(ow-iw)/2', '(oh-ih)/2', color='black')
+            .output(temp_main_video, vcodec='libx264', pix_fmt='yuv420p', r=VIDEO_FPS)
             .overwrite_output()
+            .global_args('-loglevel', 'error')
             .run(capture_stdout=True, capture_stderr=True)
         )
         
-        # Concatenate videos
-        input_list = str(Path(output_path).parent / 'concat.txt')
-        with open(input_list, 'w') as f:
+        # Create concat file in the same directory as the output
+        concat_file = temp_dir / 'concat.txt'
+        with open(concat_file, 'w') as f:
             f.write(f"file '{os.path.basename(temp_image_video)}'\n")
-            f.write("file 'temp_main.mp4'\n")
+            f.write(f"file '{os.path.basename(temp_main_video)}'\n")
             
-        # Change working directory to where the temp files are
+        # Change to output directory for concat operation
         original_cwd = os.getcwd()
-        os.chdir(Path(output_path).parent)
+        os.chdir(temp_dir)
         
         try:
+            # Concatenate the videos
             (
                 ffmpeg
-                .input(input_list, f='concat', safe=0)
+                .input(str(concat_file), f='concat', safe=0)
                 .output(str(output_path), c='copy')
                 .overwrite_output()
+                .global_args('-loglevel', 'error')
                 .run(capture_stdout=True, capture_stderr=True)
             )
         finally:
@@ -290,18 +295,18 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
             os.chdir(original_cwd)
         
         # Clean up temporary files
-        try:
-            os.remove(temp_image_video)
-            os.remove(Path(output_path).parent / 'temp_main.mp4')
-            os.remove(input_list)
-        except Exception as e:
-            print(f"Warning: Could not remove temporary files: {e}")
+        for temp_file in [temp_image_video, temp_main_video, concat_file]:
+            try:
+                os.remove(temp_file)
+            except Exception as e:
+                print(f"Warning: Could not remove temporary file {temp_file}: {e}")
         
         print(f"Generated video with overlay: {output_path}")
         return True
         
     except ffmpeg.Error as e:
-        print(f"FFmpeg error: {e.stderr.decode() if hasattr(e, 'stderr') else str(e)}")
+        stderr = e.stderr.decode() if hasattr(e, 'stderr') and e.stderr else str(e)
+        print(f"FFmpeg error: {stderr}")
         return False
     except Exception as e:
         print(f"Error creating video with overlay: {e}")
