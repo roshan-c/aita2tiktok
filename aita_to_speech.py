@@ -280,11 +280,12 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
         print(f"Original image dimensions: {img.size}")
         img.close()
         
-        # Simple filter chain for consistent results
+        # Enhanced filter chain for better aspect ratio handling
         filter_chain = [
-            'scale=w=-2:h=1920',  # Scale to target height, maintain ratio
-            'scale=w=1080:h=1920:force_original_aspect_ratio=1',  # Force to exact dimensions
-            'setsar=1'  # Set pixel aspect ratio to square
+            f'scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=decrease',  # Scale while maintaining aspect ratio
+            f'pad={VIDEO_WIDTH}:{VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black@1',  # Center with black padding
+            'setsar=1',  # Set square pixels
+            'fps=' + str(VIDEO_FPS)  # Ensure consistent framerate
         ]
         
         print("Converting image to video...")
