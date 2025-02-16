@@ -10,6 +10,7 @@ from edge_tts.exceptions import NoAudioReceived
 from pathlib import Path
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
+import moviepy_config  # Import the MoviePy configuration
 try:
     from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
 except ImportError:
