@@ -1,6 +1,6 @@
 # AITA to TikTok Video Generator
 
-An automated tool that converts Reddit's r/AmItheAsshole posts into TikTok-style videos with text-to-speech narration and dynamic subtitles.
+An automated tool that converts Reddit's r/AmItheAsshole posts into TikTok-style videos with text-to-speech narration and dynamic subtitles, and automatically uploads them to TikTok.
 
 ## Features
 
@@ -11,6 +11,8 @@ An automated tool that converts Reddit's r/AmItheAsshole posts into TikTok-style
 - Produces vertical format videos (1080x1920) suitable for TikTok
 - Includes background video templates
 - Shows upvotes and comment counts in thumbnails
+- Automatically uploads videos to TikTok with generated captions and relevant hashtags
+- Handles video upload scheduling and rate limiting
 
 ## Requirements
 
@@ -22,6 +24,7 @@ An automated tool that converts Reddit's r/AmItheAsshole posts into TikTok-style
   - python-dotenv
   - Pillow
   - moviepy
+  - tiktok-uploader (for TikTok integration)
 
 ## Setup
 
@@ -30,11 +33,18 @@ An automated tool that converts Reddit's r/AmItheAsshole posts into TikTok-style
    pip install -r requirements.txt
    ```
 
-2. Create a `.env` file with your Reddit API credentials:
+2. Create a `.env` file with your Reddit API and TikTok credentials:
    ```
    REDDIT_CLIENT_ID=your_client_id
    REDDIT_CLIENT_SECRET=your_client_secret
+   TIKTOK_SESSION_ID=your_tiktok_session_id
    ```
+
+   To get your TikTok session ID:
+   1. Log into TikTok in your web browser
+   2. Open DevTools (F12)
+   3. Go to Application > Cookies
+   4. Find and copy the value of the 'sessionid' cookie
 
 3. Ensure you have the following files in your project directory:
    - `template.png` - Template image for thumbnails

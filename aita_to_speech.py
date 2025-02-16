@@ -13,6 +13,7 @@ from PIL import Image, ImageDraw, ImageFont  # Re-added PIL
 import moviepy_config  # Import the MoviePy configuration
 from tiktok_uploader.upload import upload_video, upload_videos
 import random
+import traceback
 
 try:
     from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, \
@@ -352,13 +353,22 @@ async def upload_to_tiktok(video_path, title):
         caption = generate_tiktok_caption(title)
         
         # Get TikTok credentials from environment variables
+        session_id = os.getenv('TIKTOK_SESSION_ID')
+        if not session_id:
+            print("TikTok session ID not found in environment variables")
+            return False
+            
         cookies = {
-            'sessionid': os.getenv('TIKTOK_SESSION_ID'),
+            'sessionid': session_id,
         }
         
+        # Convert video path to string if it's a Path object
+        video_path_str = str(video_path)
+        
         # Upload the video
+        # Note: cookies parameter expects a dict[str, str] format
         upload_success = upload_video(
-            filename=str(video_path),
+            video_path_str,
             description=caption,
             cookies=cookies
         )
@@ -371,7 +381,8 @@ async def upload_to_tiktok(video_path, title):
             return False
             
     except Exception as e:
-        print(f"Error uploading to TikTok: {e}")
+        print(f"Error uploading to TikTok: {str(e)}")
+        traceback.print_exc()  # Print full traceback for debugging
         return False
 
 
