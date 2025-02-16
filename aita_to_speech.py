@@ -10,6 +10,8 @@ from edge_tts.exceptions import NoAudioReceived
 from pathlib import Path
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
+from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
+import subprocess
 
 # Load environment variables
 load_dotenv()
@@ -200,6 +202,27 @@ def generate_image(title, upvotes, comments, output_path):
         print(f"Error generating image: {e}")
 
 
+def create_subtitle_clips(subtitle_file, video_size, font_size=24):
+    """Create subtitle clips from the transcript file"""
+    with open(subtitle_file, 'r', encoding='utf-8') as f:
+        subtitle_data = []
+        for line in f:
+            # Parse the subtitle line [00:00:00.000 --> 00:00:00.000] Text
+            match = re.match(r'\[(.*?) --> (.*?)\] (.*)', line.strip())
+            if match:
+                start_time, end_time, text = match.groups()
+                # Convert timestamp to seconds
+                start_seconds = sum(float(x) * y for x, y in zip(start_time.replace(":", ".").split("."), [3600, 60, 1]))
+                end_seconds = sum(float(x) * y for x, y in zip(end_time.replace(":", ".").split("."), [3600, 60, 1]))
+                
+                txt_clip = (TextClip(text, fontsize=font_size, color='white', bg_color='black',
+                                   size=(video_size[0], None), method='caption')
+                           .set_start(start_seconds)
+                           .set_end(end_seconds)
+                           .set_position(('center', 'bottom')))
+                subtitle_data.append(txt_clip)
+    return subtitle_data
+
 async def process_story(story, index, output_dir):
     """Process a single story asynchronously"""
     print(f"Processing story {index}/10: {story['title'][:50]}...")
@@ -214,6 +237,7 @@ async def process_story(story, index, output_dir):
     audio_path = output_dir / f"{base_name}.mp3"
     subtitle_path = output_dir / f"{base_name}.txt"
     image_path = output_dir / f"{base_name}.png"
+    video_path = output_dir / f"{base_name}.mp4"
 
     try:
         await generate_tts_with_subtitles(full_text, audio_path, subtitle_path)
@@ -224,6 +248,37 @@ async def process_story(story, index, output_dir):
         generate_image(
             story["title"], story["upvotes"], story["comments"], image_path
         )
+
+        # Process video
+        template_video = VideoFileClip("template.mp4")
+        audio = AudioFileClip(str(audio_path))
+        
+        # Get the duration of the audio
+        audio_duration = audio.duration
+        
+        # Trim the template video to match audio duration (plus 1 second)
+        final_duration = audio_duration + 1
+        video = template_video.subclip(0, final_duration)
+        
+        # Create subtitle clips
+        subtitle_clips = create_subtitle_clips(subtitle_path, video.size)
+        
+        # Combine video with audio and subtitles
+        final_video = CompositeVideoClip([video] + subtitle_clips)
+        final_video = final_video.set_audio(audio)
+        
+        # Write the final video
+        final_video.write_videofile(
+            str(video_path),
+            codec='libx264',
+            audio_codec='aac',
+            fps=24
+        )
+        
+        # Clean up
+        template_video.close()
+        audio.close()
+        final_video.close()
 
     except Exception as e:
         print(f"Error processing story {story['id']}: {e}")

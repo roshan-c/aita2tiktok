@@ -8,3 +8,4 @@ ffmpeg-python
 opencv-python
 numpy
 decorator==4.4.2
+moviepy
