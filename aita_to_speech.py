@@ -11,7 +11,7 @@ from edge_tts.exceptions import NoAudioReceived
 from pathlib import Path
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
-import moviepy.editor as mp
+from moviepy.editor import VideoFileClip, ImageClip, concatenate_videoclips
 
 # Load environment variables
 load_dotenv()
@@ -219,7 +219,7 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
             return False
             
         # Load the video clip
-        video_clip = mp.VideoFileClip(video_path)
+        video_clip = VideoFileClip(video_path)
         print(f"Original video dimensions: {video_clip.w}x{video_clip.h}")
         
         # Calculate new dimensions while maintaining aspect ratio
@@ -245,14 +245,14 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
         print(f"After cropping video dimensions: {video_clip.w}x{video_clip.h}")
         
         # Load and resize the image
-        image = mp.ImageClip(str(image_path))
+        image = ImageClip(str(image_path))
         print(f"Original image dimensions: {image.w}x{image.h}")
         image = image.resize(newsize=(VIDEO_WIDTH, VIDEO_HEIGHT))
         print(f"After resize image dimensions: {image.w}x{image.h}")
         image = image.set_duration(duration)
 
         # Create the final clip by concatenating
-        final_clip = mp.concatenate_videoclips([image, video_clip])
+        final_clip = concatenate_videoclips([image, video_clip])
         print(f"Final video dimensions: {final_clip.w}x{final_clip.h}")
 
         # Write the final video
