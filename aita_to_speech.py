@@ -10,8 +10,8 @@ from edge_tts import Communicate
 from edge_tts.exceptions import NoAudioReceived
 from pathlib import Path
 from dotenv import load_dotenv
-from PIL import Image, ImageDraw, ImageFont
-from moviepy.editor import VideoFileClip, ImageClip, concatenate_videoclips
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance
+import moviepy.editor as mpy
 
 # Load environment variables
 load_dotenv()
@@ -219,7 +219,7 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
             return False
             
         # Load the video clip
-        video_clip = VideoFileClip(video_path)
+        video_clip = mpy.VideoFileClip(video_path)
         print(f"Original video dimensions: {video_clip.w}x{video_clip.h}")
         
         # Calculate new dimensions while maintaining aspect ratio
@@ -244,15 +244,16 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
         
         print(f"After cropping video dimensions: {video_clip.w}x{video_clip.h}")
         
-        # Load and resize the image
-        image = ImageClip(str(image_path))
-        print(f"Original image dimensions: {image.w}x{image.h}")
-        image = image.resize(newsize=(VIDEO_WIDTH, VIDEO_HEIGHT))
-        print(f"After resize image dimensions: {image.w}x{image.h}")
+        # Load and resize the image, manually handling the resizing to avoid moviepy's PIL resize
+        pil_image = Image.open(str(image_path))
+        pil_image = pil_image.resize((VIDEO_WIDTH, VIDEO_HEIGHT), Image.Resampling.LANCZOS)
+        # Convert PIL image to numpy array for moviepy
+        image_array = np.array(pil_image)
+        image = mpy.ImageClip(image_array)
         image = image.set_duration(duration)
 
         # Create the final clip by concatenating
-        final_clip = concatenate_videoclips([image, video_clip])
+        final_clip = mpy.concatenate_videoclips([image, video_clip])
         print(f"Final video dimensions: {final_clip.w}x{final_clip.h}")
 
         # Write the final video
