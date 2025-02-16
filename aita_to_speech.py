@@ -30,7 +30,7 @@ load_dotenv()
 
 # --- Image Generation Configuration ---
 TEMPLATE_IMAGE = "template.png"  # Path to your template image
-FONT_PATH = "arial.ttf"  # Path to your font file
+FONT_PATH = "Arial.ttf"  # Path to your font file
 FONT_SIZE = 32  # Font size for image
 TEXT_COLOR = (0, 0, 0)  # Black
 TEXT_POSITION = (50, 200)  # Top-left corner of the text area
@@ -41,9 +41,9 @@ FONT_SIZE_VIDEO = 72  # Increased font size for video
 TEXT_COLOR_VIDEO = "white"  # Changed to string
 BG_COLOR = "yellow"  # Background color for text
 BASE_OUTPUT_DIR = Path("output")
-VIDEO_WIDTH = 1080
-VIDEO_HEIGHT = 1920
-FRAME_RATE = 30
+VIDEO_WIDTH = 1280
+VIDEO_HEIGHT = 720
+FRAME_RATE = 24
 TEMPLATE_VIDEO = "template.mp4"  # Background video
 
 
@@ -219,21 +219,27 @@ def generate_image(title, upvotes, comments, output_path):
         print(f"Error generating image: {e}")
 
 
-async def process_story(story, index, output_dir):
+async def process_story(story, index, base_output_dir):
     """Process a single story asynchronously"""
     print(f"Processing story {index}/10: {story['title'][:50]}...")
+
+    # Sanitize the title for use as a folder name
+    safe_title = sanitize_filename(story["title"])
+
+    # Create the story-specific output directory
+    story_output_dir = base_output_dir / safe_title
+    story_output_dir.mkdir(parents=True, exist_ok=True)
 
     # Combine title and text
     full_text = f"{story['title']}. {story['text']}"
 
-    # Generate output filenames using the sanitized title
+    # Generate output filenames
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_title = sanitize_filename(story["title"])
     base_name = f"{safe_title}_{timestamp}"
-    audio_path = output_dir / f"{base_name}.mp3"
-    subtitle_path = output_dir / f"{base_name}.json"  # Save as JSON
-    image_path = output_dir / f"{base_name}.png"
-    video_path = output_dir / f"{base_name}.mp4"
+    audio_path = story_output_dir / f"{base_name}.mp3"
+    subtitle_path = story_output_dir / f"{base_name}.json"
+    image_path = story_output_dir / f"{base_name}.png"
+    video_path = story_output_dir / f"{base_name}.mp4"
 
     try:
         await generate_tts_with_subtitles(full_text, audio_path, subtitle_path)
@@ -282,11 +288,13 @@ async def process_story(story, index, output_dir):
                 .set_start(start_time)
                 .set_end(end_time)
                 .set_pos("center")
+                .set_duration(end_time - start_time)  # Explicit duration
             )
             word_clips.append(word_clip)
 
         # Combine video with audio and word clips
-        final_video = CompositeVideoClip([video] + word_clips)
+        final_video = CompositeVideoClip([video] + word_clips,
+                                         use_mask=True)  # Use mask
         final_video = final_video.set_audio(audio)
 
         # Write the final video
@@ -295,12 +303,15 @@ async def process_story(story, index, output_dir):
             codec='libx264',
             audio_codec='aac',
             fps=FRAME_RATE,
+            threads=4,  # Limit threads
+            logger=None,  # Suppress logs
         )
 
         # Clean up
         background_video.close()
         audio.close()
         final_video.close()
+        del background_video, audio, final_video, word_clips, subtitles  # Explicitly delete
 
     except Exception as e:
         print(f"Error processing story {story['id']}: {e}")
@@ -309,8 +320,8 @@ async def process_story(story, index, output_dir):
 async def main_async():
     # Create a new output directory based on timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = BASE_OUTPUT_DIR / timestamp
-    output_dir.mkdir(parents=True, exist_ok=True)
+    base_output_dir = BASE_OUTPUT_DIR / timestamp
+    base_output_dir.mkdir(parents=True, exist_ok=True)
 
     # Setup Reddit client
     reddit = setup_reddit()
@@ -319,12 +330,9 @@ async def main_async():
     print("Fetching AITA stories...")
     stories = fetch_aita_stories(reddit)
 
-    # Process stories concurrently
-    tasks = []
+    # Process stories sequentially
     for i, story in enumerate(stories, 1):
-        tasks.append(process_story(story, i, output_dir))
-
-    await asyncio.gather(*tasks)
+        await process_story(story, i, base_output_dir)  # Process one at a time
 
 
 def main():
