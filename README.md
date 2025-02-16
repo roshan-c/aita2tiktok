@@ -1,6 +1,6 @@
 # Reddit AITA to TikTok TTS Generator
 
-This project automates the process of converting Reddit AITA (Am I The Asshole?) stories into TTS (Text-to-Speech) audio files for creating TikTok storytime videos. It fetches top stories from r/AmItheAsshole, generates high-quality TTS using Microsoft Edge's voice synthesis, and creates corresponding subtitle files.
+This project automates the process of converting Reddit AITA (Am I The Asshole?) stories into TTS (Text-to-Speech) audio files and story images for creating TikTok storytime videos. It fetches top stories from r/AmItheAsshole, generates high-quality TTS using Microsoft Edge's voice synthesis, creates corresponding subtitle files, and generates story images with titles and stats.
 
 ## Features
 
@@ -10,11 +10,24 @@ This project automates the process of converting Reddit AITA (Am I The Asshole?)
 - Processes multiple stories concurrently
 - Cleans and formats Reddit markdown text
 - Creates organized output with audio and subtitle files
+- Generates story images with titles, upvotes, and comment counts
+- Uses customizable template for consistent branding
 
 ## Prerequisites
 
 - Python 3.7 or higher
 - A Reddit API account (for PRAW)
+- Arial.ttf font file (or another font of your choice)
+- template.png image file for story backgrounds
+
+## Required Files
+
+Before running the script, ensure you have:
+
+1. A font file (such as: Arial.ttf) in the project root directory
+2. A template.png file in the project root directory for the story image background
+   - Recommended dimensions: 1080x1920 pixels (9:16 ratio for TikTok)
+   - If you watch any TikTok AITA video, you will see they all use a similar image for their introduction. I took that and made my template using it.
 
 ## Setup
 
@@ -40,11 +53,13 @@ This project automates the process of converting Reddit AITA (Am I The Asshole?)
    - Fetch the top 10 AITA stories of the day
    - Generate MP3 audio files using TTS
    - Create corresponding subtitle files
+   - Generate story images with titles and stats
    - Save everything in the `output` directory
 
 3. Output files are named using the format:
    - Audio: `story_title_YYYYMMDD_HHMMSS.mp3`
    - Subtitles: `story_title_YYYYMMDD_HHMMSS.txt`
+   - Images: `story_title_YYYYMMDD_HHMMSS.png`
 
 The generated files can be used with video editing software to create TikTok storytime content.
 
