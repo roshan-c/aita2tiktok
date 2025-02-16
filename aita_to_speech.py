@@ -277,7 +277,7 @@ def ensure_ffmpeg():
         print(f"Found ffmpeg at: {ffmpeg_path}")
         try:
             import subprocess
-            result = subprocess.run([ffmpeg_path, '-version'], capture_output=True, text=Text=True)
+            result = subprocess.run([ffmpeg_path, '-version'], capture_output=True, text=True)
             if 'ffmpeg version' in result.stdout or 'ffmpeg version' in result.stderr:
                 return True
         except Exception as e:
