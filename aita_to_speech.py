@@ -26,12 +26,15 @@ TEXT_COLOR = (0, 0, 0)
 TEXT_POSITION = (50, 200)
 MAX_WIDTH = 700
 BASE_OUTPUT_DIR = Path("output")
+
+# TikTok video settings
+VIDEO_WIDTH = 1080  # TikTok preferred width
+VIDEO_HEIGHT = 1920  # TikTok preferred height (9:16 aspect ratio)
+VIDEO_FPS = 30  # Standard frame rate
 VIDEO_TEMPLATE = "template.mp4"
+
 WORDS_PER_SECOND = 2.5
 MIN_OVERLAY_DURATION = 3  # Minimum duration for title screen in seconds
-VIDEO_WIDTH = 1080  # TikTok preferred width
-VIDEO_HEIGHT = 1920  # TikTok preferred height
-VIDEO_FPS = 30  # Standard frame rate for TikTok
 
 # Create a timestamped output directory for this run
 CURRENT_RUN_DIR = BASE_OUTPUT_DIR / datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -235,9 +238,32 @@ def resize_image_for_tiktok(image_path):
     
     return cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
 
+def ensure_ffmpeg():
+    """Ensure ffmpeg is available on the system"""
+    try:
+        # Test ffmpeg availability
+        (
+            ffmpeg
+            .input('nullinput', f='lavfi', t=1)
+            .output('null', f='null')
+            .global_args('-v', 'error')
+            .run(capture_stdout=True, capture_stderr=True)
+        )
+        return True
+    except ffmpeg.Error:
+        print("FFmpeg not found. Please install FFmpeg and make sure it's in your system PATH.")
+        print("You can download it from: https://ffmpeg.org/download.html")
+        return False
+    except Exception as e:
+        print(f"Error checking FFmpeg: {e}")
+        return False
+
 def create_video_with_overlay(image_path, video_path, output_path, duration):
     """Overlays the image on the video for a specified duration."""
     try:
+        if not ensure_ffmpeg():
+            return False
+            
         if not os.path.exists(video_path):
             print(f"Warning: Template video {video_path} not found. Skipping video creation.")
             return False
@@ -246,58 +272,80 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
         temp_image_video = str(temp_dir / "temp_image.mp4")
         temp_main_video = str(temp_dir / "temp_main.mp4")
         
-        # Convert image to video using ffmpeg with force_original_aspect_ratio
+        print(f"Processing image: {image_path}")
+        print(f"Target dimensions: {VIDEO_WIDTH}x{VIDEO_HEIGHT}")
+        
+        # Convert image to video with letterboxing/pillarboxing
+        filter_chain = [
+            f'scale=w={VIDEO_WIDTH}:h={VIDEO_HEIGHT}:force_original_aspect_ratio=decrease',
+            f'pad={VIDEO_WIDTH}:{VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2:black',
+            'setsar=1'  # Set sample aspect ratio to 1:1
+        ]
+        
+        # Convert image to video
         (
             ffmpeg
             .input(str(image_path), loop=1, t=duration)
-            .filter('scale', f'{VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=decrease')
-            .filter('pad', VIDEO_WIDTH, VIDEO_HEIGHT, '(ow-iw)/2', '(oh-ih)/2', color='black')
-            .output(temp_image_video, vcodec='libx264', pix_fmt='yuv420p', r=VIDEO_FPS)
+            .filter_multi_output(filter_chain)
+            .output(temp_image_video, vcodec='libx264', preset='ultrafast', pix_fmt='yuv420p', r=VIDEO_FPS)
             .overwrite_output()
-            .global_args('-loglevel', 'error')
+            .global_args('-loglevel', 'info')
             .run(capture_stdout=True, capture_stderr=True)
         )
+        print("Image conversion completed")
         
+        print(f"Processing video: {video_path}")
         # Process template video with the same filter chain
         (
             ffmpeg
             .input(video_path)
-            .filter('scale', f'{VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=decrease')
-            .filter('pad', VIDEO_WIDTH, VIDEO_HEIGHT, '(ow-iw)/2', '(oh-ih)/2', color='black')
-            .output(temp_main_video, vcodec='libx264', pix_fmt='yuv420p', r=VIDEO_FPS)
+            .filter_multi_output(filter_chain)
+            .output(temp_main_video, vcodec='libx264', preset='ultrafast', pix_fmt='yuv420p', r=VIDEO_FPS)
             .overwrite_output()
-            .global_args('-loglevel', 'error')
+            .global_args('-loglevel', 'info')
             .run(capture_stdout=True, capture_stderr=True)
         )
+        print("Video processing completed")
         
         # Create concat file in the same directory as the output
         concat_file = temp_dir / 'concat.txt'
-        with open(concat_file, 'w') as f:
+        with open(concat_file, 'w', encoding='utf-8') as f:  # Explicitly use UTF-8
             f.write(f"file '{os.path.basename(temp_image_video)}'\n")
             f.write(f"file '{os.path.basename(temp_main_video)}'\n")
             
+        print("Concatenating videos...")
         # Change to output directory for concat operation
         original_cwd = os.getcwd()
         os.chdir(temp_dir)
         
         try:
-            # Concatenate the videos
+            # Concatenate the videos with consistent encoding settings
             (
                 ffmpeg
                 .input(str(concat_file), f='concat', safe=0)
-                .output(str(output_path), c='copy')
+                .output(
+                    str(output_path),
+                    vcodec='libx264',
+                    preset='ultrafast',
+                    pix_fmt='yuv420p',
+                    r=VIDEO_FPS,
+                    acodec='aac'
+                )
                 .overwrite_output()
-                .global_args('-loglevel', 'error')
+                .global_args('-loglevel', 'info')
                 .run(capture_stdout=True, capture_stderr=True)
             )
         finally:
             # Restore working directory
             os.chdir(original_cwd)
         
+        print("Video concatenation completed")
+        
         # Clean up temporary files
         for temp_file in [temp_image_video, temp_main_video, concat_file]:
             try:
-                os.remove(temp_file)
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
             except Exception as e:
                 print(f"Warning: Could not remove temporary file {temp_file}: {e}")
         
