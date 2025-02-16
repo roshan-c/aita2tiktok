@@ -9,13 +9,16 @@ from edge_tts import Communicate
 from edge_tts.exceptions import NoAudioReceived
 from pathlib import Path
 from dotenv import load_dotenv
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont  # Re-added PIL
 import moviepy_config  # Import the MoviePy configuration
+
 try:
-    from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
+    from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, \
+        CompositeVideoClip
 except ImportError:
     print("Trying alternative import...")
     import moviepy.editor as mpy
+
     VideoFileClip = mpy.VideoFileClip
     AudioFileClip = mpy.AudioFileClip
     TextClip = mpy.TextClip
@@ -27,12 +30,21 @@ load_dotenv()
 
 # --- Image Generation Configuration ---
 TEMPLATE_IMAGE = "template.png"  # Path to your template image
-FONT_PATH = "Arial.ttf"  # Path to your font file
-FONT_SIZE = 32
+FONT_PATH = "arial.ttf"  # Path to your font file
+FONT_SIZE = 32  # Font size for image
 TEXT_COLOR = (0, 0, 0)  # Black
 TEXT_POSITION = (50, 200)  # Top-left corner of the text area
 MAX_WIDTH = 700  # Maximum width of the text area
+
+# --- Video Generation Configuration ---
+FONT_SIZE_VIDEO = 72  # Increased font size for video
+TEXT_COLOR_VIDEO = "white"  # Changed to string
+BG_COLOR = "black"
 BASE_OUTPUT_DIR = Path("output")
+VIDEO_WIDTH = 1280
+VIDEO_HEIGHT = 720
+FRAME_RATE = 24
+TEMPLATE_VIDEO = "template.mp4"  # Background video
 
 
 def setup_reddit():
@@ -108,8 +120,7 @@ async def generate_tts_with_subtitles(text, audio_path, subtitle_path):
 
         # Save subtitles
         with open(subtitle_path, "w", encoding="utf-8") as f:
-            for sub in subtitles:
-                f.write(f"[{sub['start']} --> {sub['end']}] {sub['text']}\n")
+            json.dump(subtitles, f, indent=4)  # Save as JSON
 
     except NoAudioReceived as e:
         print(f"Error: No audio received - {str(e)}")
@@ -211,27 +222,6 @@ def generate_image(title, upvotes, comments, output_path):
         print(f"Error generating image: {e}")
 
 
-def create_subtitle_clips(subtitle_file, video_size, font_size=24):
-    """Create subtitle clips from the transcript file"""
-    with open(subtitle_file, 'r', encoding='utf-8') as f:
-        subtitle_data = []
-        for line in f:
-            # Parse the subtitle line [00:00:00.000 --> 00:00:00.000] Text
-            match = re.match(r'\[(.*?) --> (.*?)\] (.*)', line.strip())
-            if match:
-                start_time, end_time, text = match.groups()
-                # Convert timestamp to seconds
-                start_seconds = sum(float(x) * y for x, y in zip(start_time.replace(":", ".").split("."), [3600, 60, 1]))
-                end_seconds = sum(float(x) * y for x, y in zip(end_time.replace(":", ".").split("."), [3600, 60, 1]))
-                
-                txt_clip = (TextClip(text, fontsize=font_size, color='white', bg_color='black',
-                                   size=(video_size[0], None), method='caption')
-                           .set_start(start_seconds)
-                           .set_end(end_seconds)
-                           .set_position(('center', 'bottom')))
-                subtitle_data.append(txt_clip)
-    return subtitle_data
-
 async def process_story(story, index, output_dir):
     """Process a single story asynchronously"""
     print(f"Processing story {index}/10: {story['title'][:50]}...")
@@ -244,7 +234,7 @@ async def process_story(story, index, output_dir):
     safe_title = sanitize_filename(story["title"])
     base_name = f"{safe_title}_{timestamp}"
     audio_path = output_dir / f"{base_name}.mp3"
-    subtitle_path = output_dir / f"{base_name}.txt"
+    subtitle_path = output_dir / f"{base_name}.json"  # Save as JSON
     image_path = output_dir / f"{base_name}.png"
     video_path = output_dir / f"{base_name}.mp4"
 
@@ -259,33 +249,59 @@ async def process_story(story, index, output_dir):
         )
 
         # Process video
-        template_video = VideoFileClip("template.mp4")
+        background_video = VideoFileClip(TEMPLATE_VIDEO,
+                                         audio=False).resize(
+                                             (VIDEO_WIDTH, VIDEO_HEIGHT)
+                                         )  # Load background
+
         audio = AudioFileClip(str(audio_path))
-        
+
         # Get the duration of the audio
         audio_duration = audio.duration
-        
-        # Trim the template video to match audio duration (plus 1 second)
+
+        # Trim the background video to match audio duration (plus 1 second)
         final_duration = audio_duration + 1
-        video = template_video.subclip(0, final_duration)
-        
-        # Create subtitle clips
-        subtitle_clips = create_subtitle_clips(subtitle_path, video.size)
-        
-        # Combine video with audio and subtitles
-        final_video = CompositeVideoClip([video] + subtitle_clips)
+        video = background_video.subclip(0, final_duration)
+
+        # Load subtitles from JSON
+        with open(subtitle_path, "r", encoding="utf-8") as f:
+            subtitles = json.load(f)
+
+        # Create word clips
+        word_clips = []
+        for sub in subtitles:
+            start_time = float(sub['start'].replace(":", "."))
+            end_time = float(sub['end'].replace(":", "."))
+            word = sub['text']
+
+            word_clip = (
+                TextClip(
+                    word,
+                    fontsize=FONT_SIZE_VIDEO,
+                    color=TEXT_COLOR_VIDEO,
+                    bg_color=BG_COLOR,
+                    font=FONT_PATH,
+                )
+                .set_start(start_time)
+                .set_end(end_time)
+                .set_pos("center")
+            )
+            word_clips.append(word_clip)
+
+        # Combine video with audio and word clips
+        final_video = CompositeVideoClip([video] + word_clips)
         final_video = final_video.set_audio(audio)
-        
+
         # Write the final video
         final_video.write_videofile(
             str(video_path),
             codec='libx264',
             audio_codec='aac',
-            fps=24
+            fps=FRAME_RATE,
         )
-        
+
         # Clean up
-        template_video.close()
+        background_video.close()
         audio.close()
         final_video.close()
 
