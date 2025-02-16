@@ -10,7 +10,7 @@ from edge_tts.exceptions import NoAudioReceived
 from pathlib import Path
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
-from moviepy.editor import (
+from moviepy import (
     VideoFileClip,
     ImageClip,
     concatenate_videoclips,
