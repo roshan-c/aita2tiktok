@@ -11,7 +11,7 @@ from edge_tts.exceptions import NoAudioReceived
 from pathlib import Path
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
-from moviepy import (
+from moviepy.editor import (
     VideoFileClip,
     ImageClip,
     concatenate_videoclips,
@@ -38,7 +38,6 @@ VIDEO_FPS = 30  # Standard frame rate for TikTok
 # Create a timestamped output directory for this run
 CURRENT_RUN_DIR = BASE_OUTPUT_DIR / datetime.now().strftime("%Y%m%d_%H%M%S")
 
-
 def setup_reddit():
     """Initialize Reddit API client"""
     return praw.Reddit(
@@ -46,7 +45,6 @@ def setup_reddit():
         client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
         user_agent="AITA_TTS_Bot/1.0",
     )
-
 
 def clean_text(text):
     """Clean and format the Reddit post text"""
@@ -63,7 +61,6 @@ def clean_text(text):
     text = re.sub(r"\bAITA\b", "Am I the Asshole?", text, flags=re.IGNORECASE)
     text = re.sub(r"\bAITAH\b", "Am I the Asshole?", text, flags=re.IGNORECASE)
     return text.strip()
-
 
 def fetch_aita_stories(reddit, limit=10):
     """Fetch top stories of today from r/AITA"""
@@ -83,7 +80,6 @@ def fetch_aita_stories(reddit, limit=10):
             )
 
     return stories
-
 
 async def generate_tts_with_subtitles(text, audio_path, subtitle_path):
     """Generate TTS audio and subtitles using Microsoft Edge's TTS"""
@@ -122,14 +118,12 @@ async def generate_tts_with_subtitles(text, audio_path, subtitle_path):
         print(f"Error during TTS generation: {str(e)}")
         raise
 
-
 def format_timestamp(seconds):
     """Convert seconds to HH:MM:SS.mmm format"""
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
     seconds_remainder = seconds % 60
     return f"{hours:02d}:{minutes:02d}:{seconds_remainder:06.3f}"
-
 
 def sanitize_filename(title):
     """Convert a title into a safe filename"""
@@ -144,7 +138,6 @@ def sanitize_filename(title):
     # Limit length to prevent overly long filenames
     title = title[:50] if len(title) > 50 else title
     return title.strip("_").lower()
-
 
 def text_wrap(text, font, max_width):
     """Wrap text to fit within a maximum width."""
@@ -176,9 +169,7 @@ def text_wrap(text, font, max_width):
     # lines array.
     else:
         lines.append(text)
-    # Return the lines array.
     return lines
-
 
 def generate_image(title, upvotes, comments, output_path):
     """Generate the image for the AITA story."""
@@ -210,6 +201,19 @@ def generate_image(title, upvotes, comments, output_path):
     except Exception as e:
         print(f"Error generating image: {e}")
 
+def ensure_tiktok_dimensions(clip, target_width=1080, target_height=1920):
+    """Ensures the clip matches TikTok's preferred dimensions (9:16 ratio)"""
+    current_ratio = clip.size[0] / clip.size[1]
+    target_ratio = target_width / target_height
+    
+    if current_ratio > target_ratio:  # Too wide
+        new_width = int(clip.size[1] * target_ratio)
+        new_height = clip.size[1]
+    else:  # Too tall
+        new_width = clip.size[0]
+        new_height = int(clip.size[0] / target_ratio)
+    
+    return clip.resize(width=new_width, height=new_height)
 
 def create_video_with_overlay(image_path, video_path, output_path, duration):
     """Overlays the image on the video for a specified duration."""
@@ -218,21 +222,44 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
             print(f"Warning: Template video {video_path} not found. Skipping video creation.")
             return False
             
-        # Load the video clip and resize to TikTok dimensions
-        video_clip = (VideoFileClip(video_path)
-                     .resize(width=VIDEO_WIDTH)
-                     .resize(height=VIDEO_HEIGHT))
+        # Load the video clip
+        video_clip = VideoFileClip(video_path)
+        print(f"Original video dimensions: {video_clip.w}x{video_clip.h}")
         
-        # Load the image as a clip
-        image = (ImageClip(str(image_path))
-                .resize(width=VIDEO_WIDTH)
-                .resize(height=VIDEO_HEIGHT)
-                .set_duration(duration))
+        # Calculate new dimensions while maintaining aspect ratio
+        video_aspect = video_clip.w / video_clip.h
+        target_aspect = VIDEO_WIDTH / VIDEO_HEIGHT
+        print(f"Original aspect ratio: {video_aspect:.2f}, Target aspect ratio: {target_aspect:.2f}")
+        
+        if video_aspect > target_aspect:  # Too wide
+            new_width = int(video_clip.h * target_aspect)
+            print(f"Video too wide. Cropping width to: {new_width}")
+            video_clip = video_clip.crop(x1=(video_clip.w - new_width)/2, 
+                                       y1=0, 
+                                       x2=(video_clip.w + new_width)/2, 
+                                       y2=video_clip.h)
+        else:  # Too tall
+            new_height = int(video_clip.w / target_aspect)
+            print(f"Video too tall. Cropping height to: {new_height}")
+            video_clip = video_clip.crop(x1=0,
+                                       y1=(video_clip.h - new_height)/2,
+                                       x2=video_clip.w,
+                                       y2=(video_clip.h + new_height)/2)
+        
+        print(f"After cropping video dimensions: {video_clip.w}x{video_clip.h}")
+        
+        # Load and resize the image
+        image = ImageClip(str(image_path))
+        print(f"Original image dimensions: {image.w}x{image.h}")
+        image = image.resize(newsize=(VIDEO_WIDTH, VIDEO_HEIGHT))
+        print(f"After resize image dimensions: {image.w}x{image.h}")
+        image = image.set_duration(duration)
 
         # Create the final clip by concatenating
         final_clip = concatenate_videoclips([image, video_clip])
+        print(f"Final video dimensions: {final_clip.w}x{final_clip.h}")
 
-        # Write the final video to a file
+        # Write the final video
         final_clip.write_videofile(
             str(output_path),
             fps=VIDEO_FPS,
@@ -240,7 +267,7 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
             audio_codec="aac"
         )
         
-        # Clean up to prevent memory leaks
+        # Clean up
         video_clip.close()
         image.close()
         final_clip.close()
@@ -250,7 +277,7 @@ def create_video_with_overlay(image_path, video_path, output_path, duration):
 
     except Exception as e:
         print(f"Error creating video with overlay: {e}")
-        traceback.print_exc()  # Print the full error traceback for debugging
+        traceback.print_exc()
         return False
 
 async def process_story(story, index):
@@ -295,7 +322,6 @@ async def process_story(story, index):
     except Exception as e:
         print(f"Error processing story {story['id']}: {e}")
 
-
 async def main_async():
     # Create base output directory if it doesn't exist
     BASE_OUTPUT_DIR.mkdir(exist_ok=True)
@@ -318,10 +344,8 @@ async def main_async():
 
     await asyncio.gather(*tasks)
 
-
 def main():
     asyncio.run(main_async())
-
 
 if __name__ == "__main__":
     main()
