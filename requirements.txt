@@ -8,3 +8,6 @@ ffmpeg-python  # Required for video processing
 decorator>=4.4.2  # Required by moviepy
 numpy  # Required by moviepy and Pillow
 tiktok-uploader  # For TikTok video uploads
+selenium  # Required by tiktok-uploader
+selenium-wire  # Better cookie handling
+webdriver-manager  # For managing Chrome WebDriver

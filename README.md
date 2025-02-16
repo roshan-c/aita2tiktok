@@ -17,6 +17,7 @@ An automated tool that converts Reddit's r/AmItheAsshole posts into TikTok-style
 ## Requirements
 
 - Python 3.11+
+- Google Chrome Browser (required for TikTok uploads)
 - Required Python packages (install via `pip install -r requirements.txt`):
   - praw (Reddit API wrapper)
   - markdown
@@ -25,15 +26,21 @@ An automated tool that converts Reddit's r/AmItheAsshole posts into TikTok-style
   - Pillow
   - moviepy
   - tiktok-uploader (for TikTok integration)
+  - selenium (for browser automation)
+  - webdriver-manager (for Chrome WebDriver management)
 
 ## Setup
 
-1. Install required dependencies:
+1. Install Google Chrome:
+   - Download and install from https://www.google.com/chrome/
+   - Required for TikTok video uploads
+
+2. Install required dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-2. Create a `.env` file with your Reddit API and TikTok credentials:
+3. Create a `.env` file with your Reddit API and TikTok credentials:
    ```
    REDDIT_CLIENT_ID=your_client_id
    REDDIT_CLIENT_SECRET=your_client_secret
@@ -50,7 +57,7 @@ An automated tool that converts Reddit's r/AmItheAsshole posts into TikTok-style
    
    Note: The session ID expires periodically, so you may need to update it if uploads stop working.
 
-3. Ensure you have the following files in your project directory:
+4. Ensure you have the following files in your project directory:
    - `template.png` - Template image for thumbnails
    - `template.mp4` - Background video template
    - `arial.ttf` - Arial font file for text rendering

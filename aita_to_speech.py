@@ -11,9 +11,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont  # Re-added PIL
 import moviepy_config  # Import the MoviePy configuration
-from tiktok_uploader.upload import upload_video, upload_videos
-import random
-import traceback
 
 try:
     from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, \
@@ -33,7 +30,7 @@ load_dotenv()
 
 # --- Image Generation Configuration ---
 TEMPLATE_IMAGE = "template.png"  # Path to your template image
-FONT_PATH = "Arial.ttf"  # Path to your font file
+FONT_PATH = "arial.ttf"  # Path to your font file
 FONT_SIZE = 32  # Font size for image
 TEXT_COLOR = (0, 0, 0)  # Black
 TEXT_POSITION = (50, 200)  # Top-left corner of the text area
@@ -48,14 +45,6 @@ VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
 FRAME_RATE = 30
 TEMPLATE_VIDEO = "template.mp4"  # Background video
-
-# --- TikTok Configuration ---
-HASHTAGS = [
-    "#reddit", "#aita", "#redditstories", "#storytime", "#viral", 
-    "#fyp", "#foryou", "#drama", "#story", "#redditreadings"
-]
-MAX_HASHTAGS = 5  # TikTok allows up to 30 hashtags, but we'll use fewer
-DEFAULT_CAPTION_PREFIX = "Reddit AITA Story 🤔 What do you think? "
 
 
 def setup_reddit():
@@ -84,7 +73,7 @@ def clean_text(text):
     return text.strip()
 
 
-def fetch_aita_stories(reddit, limit=10):
+def fetch_aita_stories(reddit, limit=20):
     """Fetch top stories of today from r/AITA"""
     subreddit = reddit.subreddit("AmItheAsshole")
     stories = []
@@ -230,6 +219,23 @@ def generate_image(title, upvotes, comments, output_path):
         print(f"Error generating image: {e}")
 
 
+def generate_caption_and_hashtags(title):
+    """Generates a caption and relevant hashtags based on the title."""
+    # Basic caption - you can expand on this
+    caption = f"AITA: {title}. What do you think?"
+
+    # Extract keywords from the title for hashtags
+    keywords = re.findall(r"\b\w+\b", title.lower())  # Extract all words
+    # Remove common words like "the", "a", "is", etc.
+    common_words = ["the", "a", "is", "am", "are", "i", "for", "of", "in"]
+    keywords = [word for word in keywords if word not in common_words]
+
+    # Generate hashtags
+    hashtags = [f"#aita", "#amitheasshole"] + [f"#{keyword}" for keyword in keywords[:5]]  # Limit to 5 keywords
+
+    return caption, " ".join(hashtags)
+
+
 async def process_story(story, index, base_output_dir):
     """Process a single story asynchronously"""
     print(f"Processing story {index}/10: {story['title'][:50]}...")
@@ -251,6 +257,7 @@ async def process_story(story, index, base_output_dir):
     subtitle_path = story_output_dir / f"{base_name}.json"
     image_path = story_output_dir / f"{base_name}.png"
     video_path = story_output_dir / f"{base_name}.mp4"
+    caption_path = story_output_dir / f"{base_name}_caption.txt"  # Caption file
 
     try:
         await generate_tts_with_subtitles(full_text, audio_path, subtitle_path)
@@ -261,6 +268,12 @@ async def process_story(story, index, base_output_dir):
         generate_image(
             story["title"], story["upvotes"], story["comments"], image_path
         )
+
+        # Generate caption and hashtags
+        caption, hashtags = generate_caption_and_hashtags(story["title"])
+        with open(caption_path, "w", encoding="utf-8") as f:
+            f.write(f"{caption}\n\n{hashtags}")
+        print(f"Generated caption and hashtags: {caption_path}")
 
         # Process video
         background_video = VideoFileClip(TEMPLATE_VIDEO,
@@ -313,7 +326,7 @@ async def process_story(story, index, base_output_dir):
             codec='libx264',
             audio_codec='aac',
             fps=FRAME_RATE,
-            threads=4,  # Limit threads
+            threads=6,  # Limit threads
             logger=None,  # Suppress logs
         )
 
@@ -323,74 +336,8 @@ async def process_story(story, index, base_output_dir):
         final_video.close()
         del background_video, audio, final_video, word_clips, subtitles  # Explicitly delete
 
-        # After video creation is complete, upload to TikTok
-        upload_success = await upload_to_tiktok(video_path, story['title'])
-        if upload_success:
-            print(f"Video {index} uploaded successfully to TikTok")
-        else:
-            print(f"Failed to upload video {index} to TikTok")
-
     except Exception as e:
         print(f"Error processing story {story['id']}: {e}")
-
-
-def generate_tiktok_caption(title):
-    """Generate a TikTok-friendly caption with hashtags"""
-    # Clean and shorten the title if needed
-    clean_title = title[:100] if len(title) > 100 else title
-    
-    # Randomly select hashtags
-    selected_hashtags = random.sample(HASHTAGS, min(MAX_HASHTAGS, len(HASHTAGS)))
-    hashtag_string = " ".join(selected_hashtags)
-    
-    # Combine caption components
-    caption = f"{DEFAULT_CAPTION_PREFIX}{clean_title}\n\n{hashtag_string}"
-    return caption
-
-async def upload_to_tiktok(video_path, title):
-    """Upload video to TikTok with caption and hashtags"""
-    try:
-        caption = generate_tiktok_caption(title)
-        
-        # Get TikTok session ID
-        session_id = os.getenv('TIKTOK_SESSION_ID')
-        if not session_id:
-            print("TikTok session ID not found in environment variables")
-            return False
-            
-        # Create cookies list with session ID
-        cookies_list = [
-            {
-                'name': 'sessionid',
-                'value': session_id,
-                'domain': '.tiktok.com'
-            }
-        ]
-        
-        # Convert video path to string if it's a Path object
-        video_path_str = str(video_path)
-        
-        print(f"Uploading video with caption: {caption}")
-        print(f"Using sessionid: {session_id[:5]}...")  # Only show first 5 chars for security
-        
-        # Upload the video using cookies_list
-        upload_success = upload_video(
-            video_path_str,
-            description=caption,
-            cookies_list=cookies_list
-        )
-        
-        if upload_success:
-            print(f"Successfully uploaded video to TikTok: {title}")
-            return True
-        else:
-            print(f"Failed to upload video to TikTok: {title}")
-            return False
-            
-    except Exception as e:
-        print(f"Error uploading to TikTok: {str(e)}")
-        traceback.print_exc()
-        return False
 
 
 async def main_async():
@@ -412,11 +359,6 @@ async def main_async():
 
 
 def main():
-    # First check if TikTok credentials are present
-    if not os.getenv('TIKTOK_SESSION_ID'):
-        print("Warning: TikTok session ID not found in .env file. Videos will be created but not uploaded.")
-        print("Add TIKTOK_SESSION_ID to your .env file to enable TikTok uploads.")
-    
     asyncio.run(main_async())
 
 
