@@ -41,10 +41,14 @@ An automated tool that converts Reddit's r/AmItheAsshole posts into TikTok-style
    ```
 
    To get your TikTok session ID:
-   1. Log into TikTok in your web browser
-   2. Open DevTools (F12)
-   3. Go to Application > Cookies
-   4. Find and copy the value of the 'sessionid' cookie
+   1. Log into TikTok in your web browser (preferably Chrome)
+   2. Open DevTools (F12 or right-click -> Inspect)
+   3. Go to Application tab (or Storage in Firefox)
+   4. Under Cookies, select "https://www.tiktok.com"
+   5. Find the cookie named 'sessionid'
+   6. Copy its value and paste it into your .env file
+   
+   Note: The session ID expires periodically, so you may need to update it if uploads stop working.
 
 3. Ensure you have the following files in your project directory:
    - `template.png` - Template image for thumbnails

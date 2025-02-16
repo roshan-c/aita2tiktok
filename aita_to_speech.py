@@ -352,35 +352,32 @@ async def upload_to_tiktok(video_path, title):
     try:
         caption = generate_tiktok_caption(title)
         
-        # Get TikTok session ID and update cookies file
+        # Get TikTok session ID
         session_id = os.getenv('TIKTOK_SESSION_ID')
         if not session_id:
             print("TikTok session ID not found in environment variables")
             return False
             
-        # Update the cookies file with the current session ID and required fields
-        cookies_file = Path("tiktok_cookies.txt")
-        cookie_data = [{
-            "domain": "www.tiktok.com",
-            "name": "sessionid",
-            "path": "/",
-            "value": session_id
-        }]
-        
-        with open(cookies_file, "w", encoding="utf-8") as f:
-            json.dump(cookie_data, f, indent=4)
+        # Create cookies list with session ID
+        cookies_list = [
+            {
+                'name': 'sessionid',
+                'value': session_id,
+                'domain': '.tiktok.com'
+            }
+        ]
         
         # Convert video path to string if it's a Path object
         video_path_str = str(video_path)
         
         print(f"Uploading video with caption: {caption}")
-        print(f"Using cookies file: {cookies_file}")
+        print(f"Using sessionid: {session_id[:5]}...")  # Only show first 5 chars for security
         
-        # Upload the video using the cookies file
+        # Upload the video using cookies_list
         upload_success = upload_video(
             video_path_str,
             description=caption,
-            cookies=str(cookies_file)
+            cookies_list=cookies_list
         )
         
         if upload_success:
